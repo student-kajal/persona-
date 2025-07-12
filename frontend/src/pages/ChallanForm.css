@@ -1,0 +1,64 @@
+/* Remove spinner buttons from number inputs */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Sticky table header */
+.table-responsive {
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: auto;
+  position: relative;
+}
+
+/* Minimum width for table so columns don't collapse */
+.table {
+  min-width: 700px;
+}
+
+/* Sticky header */
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: #212529;
+  color: white;
+  z-index: 10;
+}
+
+/* Row hover effect */
+.table tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.05);
+}
+
+/* Highlight rows (optional, if you use these classes) */
+/*
+.zero-stock-row, .zero-stock-row td {
+  background-color: #ffd6d6 !important;
+}
+.low-stock-row, .low-stock-row td {
+  background-color: #fff9b0 !important;
+}
+*/
+
+/* Responsive improvements for mobile/tablet */
+@media (max-width: 900px) {
+  .table-responsive {
+    font-size: 13px;
+  }
+  .table, .table th, .table td {
+    min-width: 120px;
+    padding: 8px;
+  }
+}
+@media (max-width: 600px) {
+  .table, .table th, .table td {
+    min-width: 90px;
+    font-size: 12px;
+    padding: 6px;
+  }
+}
