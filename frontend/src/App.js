@@ -42,9 +42,12 @@ function App() {
     <AuthProvider>
       <Router>
         <ToastContainer position="bottom-right" autoClose={3000} />
+        
         <Routes>
-          {/* Public Route */}
+          
+          Public Route
           <Route path="/login" element={<Login />} />
+         
 
           {/* Protected Routes */}
           <Route
