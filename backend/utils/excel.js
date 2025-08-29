@@ -1,27 +1,32 @@
-const xlsx = require('xlsx');
+const ExcelJS = require('exceljs');
 
-exports.exportToExcel = (products) => {
-  const worksheet = xlsx.utils.json_to_sheet(products.map(p => ({
-    'Article': p.article,
-    'Stock Type': p.stockType,
-    'Color': p.color,
-    'Size': p.size,
-    'Cartons': p.cartons,
-    'Pair/Carton': p.pairPerCarton,
-    'MRP': p.mrp,
-    'Rate': p.rate,
-    'Packing': p.packing
-  })));
-  const workbook = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(workbook, worksheet, 'Products');
-  return xlsx.write(workbook, { type: 'buffer' });
-};
-
-// Excel Import Function
-exports.importFromExcel = (filePath) => {
-  const workbook = xlsx.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const data = xlsx.utils.sheet_to_json(worksheet);
+// Function to read Excel file (agar read karna hai)
+async function readExcel(filePath) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  const worksheet = workbook.getWorksheet(1);  // Pehla sheet
+  const data = [];
+  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    data.push(row.values);  // Row data array mein push kar
+  });
   return data;
-};
+}
+
+// Function to write Excel file (agar write karna hai, jaise export)
+async function writeExcel(filePath, data) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Sheet1');
+  
+  // Headers add kar (apne columns ke hisaab se)
+  sheet.addRow(['Id', 'Name', 'Price', 'Quantity']);  // Example columns
+  
+  // Data rows add kar
+  data.forEach(row => {
+    sheet.addRow(row);
+  });
+  
+  await workbook.xlsx.writeFile(filePath);
+  console.log('Excel file written successfully.');
+}
+
+module.exports = { readExcel, writeExcel };  // Export functions jo productController mein use hote hain
