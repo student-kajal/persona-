@@ -21,7 +21,7 @@ const api = axios.create({
   baseURL:
     process.env.NODE_ENV === 'development'
       ? 'http://localhost:5000/api'
-      : process.env.REACT_APP_API_BASE_URL + '/api'
+      : process.env.REACT_APP_API_BASE_URL   // /api already laga hua hai!
 });
 
 api.interceptors.request.use(config => {
