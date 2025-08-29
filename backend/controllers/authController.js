@@ -20,14 +20,33 @@ exports.register = async (req, res) => {
   }
 };
 
+// exports.login = async (req, res) => {
+//   const { email, password } = req.body;
+//   try {
+//     const user = await User.findOne({ email });
+//     if (!user || !(await bcrypt.compare(password, user.password))) {
+//       return res.status(401).json({ error: 'Invalid credentials' });
+//     }
+
+//     const token = jwt.sign({ user: { id: user.id } }, process.env.JWT_SECRET, { expiresIn: '1h' });
+//     res.json({ token });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
 exports.login = async (req, res) => {
   const { email, password } = req.body;
+  console.log('Login attempt:', email);  // Yeh backend logs mein dikhega
   try {
     const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user) {
+      console.log('User not found:', email);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
+    if (!(await bcrypt.compare(password, user.password))) {
+      console.log('Password mismatch for:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const token = jwt.sign({ user: { id: user.id } }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
   } catch (err) {

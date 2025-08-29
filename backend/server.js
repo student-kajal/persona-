@@ -36,7 +36,13 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+//app.use(cors());
+app.use(cors({
+  origin: ['https://persona-pfqu.vercel.app', 'http://localhost:3000'],  // Frontend URLs allow karo
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // ✅ Static files serve करने के लिए
