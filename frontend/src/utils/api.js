@@ -2,7 +2,7 @@ import axios from 'axios';
 
 //const base = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api' || 'https://gp-fax.onrender.com/api'  // your backend server address and port
+  baseURL: 'http://localhost:5000/api' || 'https://gp-fax1.onrender.com'  // your backend server address and port
     //baseURL: `${base}/api`
 });
 
