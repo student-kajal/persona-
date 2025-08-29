@@ -25,14 +25,25 @@ exports.generateProductPDF = async (req, res) => {
       const content = [];
       
       // Add image if enabled and available
-      if (includeImages && product.imageUrl) {
-        const imageData = await axios.get(product.imageUrl, { responseType: 'arraybuffer' });
-        content.push({ 
-          image: `data:image/jpeg;base64,${Buffer.from(imageData.data).toString('base64')}`,
-          width: 150,
-          margin: [0, 0, 0, 10]
-        });
-      }
+      // if (includeImages && product.imageUrl) {
+      //   const imageData = await axios.get(product.imageUrl, { responseType: 'arraybuffer' });
+      //   content.push({ 
+      //     image: `data:image/jpeg;base64,${Buffer.from(imageData.data).toString('base64')}`,
+      //     width: 150,
+      //     margin: [0, 0, 0, 10]
+      //   });
+      // }
+
+      // if (includeImages && product.imageUrl) {
+if (includeImages && product.image) {
+  const imageData = await axios.get(product.image, { responseType: 'arraybuffer' });
+  content.push({
+    image: `data:image/jpeg;base64,${Buffer.from(imageData.data).toString('base64')}`,
+    width: 150,
+    margin: [0, 0, 0, 10]
+  });
+}
+
 
       // Add selected properties
       const propRows = selectedProperties.map(prop => ({

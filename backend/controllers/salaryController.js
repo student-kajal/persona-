@@ -1,46 +1,197 @@
+
+const mongoose = require('mongoose');
 const SalaryEntry = require('../models/SalaryEntry');
+const Product = require('../models/Product');
+const History = require('../models/History');
 
 exports.getSalaryReport = async (req, res) => {
   try {
     const { from, to, worker } = req.query;
 
-    const query = {
+    const matchQuery = {
       createdAt: {
         $gte: new Date(from),
         $lte: new Date(to + 'T23:59:59.999Z')
       }
     };
-
     if (worker && worker !== 'all') {
-      query.createdBy = worker.toUpperCase();
+      matchQuery.createdBy = worker.toUpperCase();
     }
 
-    const records = await SalaryEntry.find(query)
-      .select('createdBy article cartons pairPerCarton totalPairs createdAt');
+    // Aggregation to SUM up cartons per user, article, and gender
+    const salaryData = await SalaryEntry.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: {
+            createdBy: "$createdBy",
+            article: "$article",
+            gender: "$gender"
+          },
+          totalCartons: { $sum: "$cartons" },
+          totalPairs: { $sum: "$totalPairs" },
+          lastEntryDate: { $max: "$createdAt" },
+          pairPerCarton: { $first: "$pairPerCarton" } // Assuming it's the same
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          createdBy: "$_id.createdBy",
+          article: "$_id.article",
+          gender: "$_id.gender",
+          cartons: "$totalCartons",
+          pairs: "$totalPairs",
+          pairPerCarton: "$pairPerCarton",
+          date: "$lastEntryDate"
+        }
+      }
+    ]);
 
     const workerContributions = {};
-
-    records.forEach(record => {
+    salaryData.forEach(record => {
       const w = record.createdBy;
-      const art = record.article;
-      const dateStr = record.createdAt.toISOString().split('T')[0];
-
       if (!workerContributions[w]) {
         workerContributions[w] = { worker: w, articles: [] };
       }
-
       workerContributions[w].articles.push({
-        article: art,
-        cartons: record.cartons,
-        pairs: record.totalPairs,
-        date: dateStr // ✅ Needed by frontend
+        date: record.date.toISOString().split('T')[0],
+        article: record.article,
+        gender: record.gender,
+        cartons: record.cartons, // This is now the correct SUM
+        pairPerCarton: record.pairPerCarton,
+        pairs: record.pairs, // This is also the correct SUM
       });
     });
 
     const report = Object.values(workerContributions);
-
     res.json({ success: true, data: report });
+
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 
+exports.updateSalaryEntry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cartons, pairPerCarton, gender } = req.body;
+
+    const totalPairs = cartons * pairPerCarton;
+
+    const updateData = {
+      cartons,
+      pairPerCarton,
+      totalPairs
+    };
+
+    // ✅ Agar gender aaya to update karo
+    if (gender) {
+      updateData.gender = gender.toLowerCase();
+    }
+
+    const updatedEntry = await SalaryEntry.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedEntry) {
+      return res.status(404).json({ success: false, message: "Entry not found" });
+    }
+
+    res.json({ success: true, data: updatedEntry });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.softDeleteSalaryEntry = async (req, res) => {
+  try {
+    const { productId, createdBy } = req.body;
+    const worker = createdBy.toUpperCase();
+
+    const entry = await SalaryEntry.findOneAndUpdate(
+      { product: productId, createdBy: worker },
+      { cartons: 0, totalPairs: 0 }
+    );
+
+    const sumCartonsAgg = await SalaryEntry.aggregate([
+      { $match: { product: entry.product } },
+      { $group: { _id: null, total: { $sum: "$cartons" } } }
+    ]);
+    await Product.findByIdAndUpdate(
+      entry.product,
+      { cartons: sumCartonsAgg?.total || 0 }
+    );
+
+    res.json({ success: true, message: "Entry soft-deleted, stock updated" });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+
+
+exports.patchSalaryEntry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cartons } = req.body;
+
+    // 1. SalaryEntry लो
+    const entry = await SalaryEntry.findById(id);
+    if (!entry) return res.status(404).json({ success: false, error: "SalaryEntry not found." });
+
+    // 2. Update करो
+    const oldCartons = entry.cartons;
+    entry.cartons = Number(cartons);
+    entry.totalPairs = entry.cartons * entry.pairPerCarton;
+    await entry.save();
+
+    // 3. Cartons aggregate करो और Product को update करो – यहां **new** ज़रूरी है!
+    const prodId = new mongoose.Types.ObjectId(entry.product.toString());
+    const [{ total = 0 } = {}] = await SalaryEntry.aggregate([
+      { $match: { product: prodId } },
+      { $group: { _id: null, total: { $sum: "$cartons" } } }
+    ]);
+    await Product.findByIdAndUpdate(prodId, { cartons: total });
+
+    // 4. History log कर दो
+    await History.create({
+      product: entry.product,
+      action: 'UPDATE',
+      salaryEntryId: entry._id, 
+      oldValue: oldCartons,
+      newValue: entry.cartons,
+      quantityChanged: entry.cartons - oldCartons,
+      updatedBy: req.user?.id,
+      updatedByName: entry.createdBy,
+      note: `Edited cartons from ${oldCartons} to ${entry.cartons} for ${entry.createdBy}`,
+      timestamp: new Date(),
+    });
+
+    res.json({ success: true, entry });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Yeh naya function add karein
+// Is naye function ko file mein kahin bhi (doosre exports ke saath) add karo
+
+exports.getSalaryEntryById = async (req, res) => {
+  try {
+    const entry = await SalaryEntry.findById(req.params.id);
+    if (!entry) {
+      return res.status(404).json({ success: false, message: "Salary entry not found" });
+    }
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    // Agar ID ka format galat hai to 400 error bhejo
+    if (err.kind === 'ObjectId') {
+      return res.status(400).json({ success: false, message: "Invalid ID format" });
+    }
     res.status(500).json({ success: false, error: err.message });
   }
 };

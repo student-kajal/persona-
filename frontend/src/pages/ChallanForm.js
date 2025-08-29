@@ -1,650 +1,20 @@
-// import React, { useState, useEffect } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import { toast } from 'react-toastify';
-// import { FaPlus, FaTrash, FaSave, FaTimes, FaSpinner } from 'react-icons/fa';
-// import api from '../utils/api';
-// import './ChallanForm.css';
 
-// const ChallanForm = () => {
-//   const navigate = useNavigate();
-//   const [saving, setSaving] = useState(false);
-//   const [articleVariants, setArticleVariants] = useState({});
-//   const [loadingVariants, setLoadingVariants] = useState({});
-
-//   const [formData, setFormData] = useState({
-//     partyName: '',
-//     date: new Date().toISOString().split('T')[0],
-//     invoiceNo: '',
-//     station: '',
-//     transport: '',
-//     marka: '',
-//     items: [{
-//       article: '',
-//       size: '',
-//       color: '',
-//       cartons: 1,
-//       pairPerCarton: 0,
-//       rate: 0,
-//       totalPair: 0,
-//       amount: 0
-//     }]
-//   });
-
-//   // Auto-generate invoice number
-//   useEffect(() => {
-//     const fetchLatestInvoice = async () => {
-//       try {
-//         const res = await api.get('/challans/latest-invoice');
-//         const nextNumber = (res.data.invoice || 0) + 1;
-//         setFormData(prev => ({
-//           ...prev,
-//           invoiceNo: `${nextNumber}/${new Date().getFullYear()}`
-//         }));
-//       } catch (err) {
-//         console.error('Invoice error:', err);
-//         setFormData(prev => ({
-//           ...prev,
-//           invoiceNo: `1/${new Date().getFullYear()}`
-//         }));
-//       }
-//     };
-//     fetchLatestInvoice();
-//   }, []);
-
-//   // Debounced article search
-//   const debounce = (func, delay) => {
-//     let timeoutId;
-//     return (...args) => {
-//       clearTimeout(timeoutId);
-//       timeoutId = setTimeout(() => func(...args), delay);
-//     };
-//   };
-
-
-//  // const debouncedFetch = debounce(fetchArticleVariants, 500);
-//  const fetchArticleVariants = async (article, index, isBlur = false) => {
-//   if (!article.trim()) {
-//     setArticleVariants(prev => ({ ...prev, [index]: [] }));
-//     return;
-//   }
-  
-//   setLoadingVariants(prev => ({ ...prev, [index]: true }));
-
-//   try {
-//     const response = await api.get(`/challans/article/${article}/variants`);
-    
-//     // Update variants even if empty array
-//     setArticleVariants(prev => ({
-//       ...prev,
-//       [index]: response.data.data
-//     }));
-
-//     // Show warning only if no variants found AND (isBlur OR input hasn't changed)
-//     if (response.data.data.length === 0 && (isBlur)) {
-//       toast.warning(`"${article}" article not found in database`, {
-//         autoClose: 3000,
-//         position: 'top-center'
-//       });
-//     }
-
-//   } catch (err) {
-//     // Only show error if input hasn't changed OR on blur
-//     if (isBlur) {
-//       toast.error(err.response?.data?.error || `"${article}" not found`, {
-//         autoClose: 3000,
-//         position: 'top-center'
-//       });
-//     }
-//     // Clear variants for this index
-//     setArticleVariants(prev => ({ ...prev, [index]: [] }));
-    
-//   } finally {
-//     setLoadingVariants(prev => ({ ...prev, [index]: false }));
-//   }
-// };
-
-//  const debouncedFetch = debounce(fetchArticleVariants, 500);
-//   const handleItemChange = (index, e) => {
-//     const { name, value } = e.target;
-//     const newItems = [...formData.items];
-    
-//     if (name === 'article' || name === 'partyName' || name === 'station' || name === 'transport' || name === 'marka') {
-//       newItems[index][name] = value.toUpperCase();
-//     } else {
-//       newItems[index][name] = name === 'cartons' || name === 'rate' ? parseFloat(value) || 0 : value;
-//     }
-
-//     if (name === 'article') {
-//       //debouncedFetch(value, index);
-//         debouncedFetch(value, index);
-//       newItems[index].size = '';
-//       newItems[index].color = '';
-//       newItems[index].pairPerCarton = 0;
-//       newItems[index].rate = 0;
-//     }
-
-//     if (name === 'size') {
-//       newItems[index].color = '';
-//       const variants = articleVariants[index] || [];
-//       const sizeVariants = variants.filter(v => v.size === value);
-//       if (sizeVariants.length === 1) {
-//         newItems[index].color = sizeVariants[0].color;
-//         newItems[index].pairPerCarton = sizeVariants[0].pairPerCarton;
-//         newItems[index].rate = sizeVariants[0].rate;
-//       }
-//     }
-
-//     if (name === 'color') {
-//       const variants = articleVariants[index] || [];
-//       const selectedVariant = variants.find(v => 
-//         v.size === newItems[index].size && 
-//         v.color === value
-//       );
-      
-//       if (selectedVariant) {
-//         newItems[index].pairPerCarton = selectedVariant.pairPerCarton;
-//         newItems[index].rate = selectedVariant.rate;
-//       }
-//     }
-
-//     newItems[index].totalPair = newItems[index].cartons * newItems[index].pairPerCarton;
-//     newItems[index].amount = newItems[index].totalPair * newItems[index].rate;
-    
-//     setFormData(prev => ({ ...prev, items: newItems }));
-//   };
-
-//   const addItemRow = () => {
-//     setFormData(prev => ({
-//       ...prev,
-//       items: [...prev.items, {
-//         article: '',
-//         size: '',
-//         color: '',
-//         cartons: 1,
-//         pairPerCarton: 0,
-//         rate: 0,
-//         totalPair: 0,
-//         amount: 0
-//       }]
-//     }));
-//   };
-
-//   const removeItemRow = (index) => {
-//     if (formData.items.length > 1) {
-//       const newItems = formData.items.filter((_, i) => i !== index);
-//       setFormData(prev => ({ ...prev, items: newItems }));
-      
-//       const newVariants = { ...articleVariants };
-//       delete newVariants[index];
-//       setArticleVariants(newVariants);
-//     }
-//   };
-
-//   const calculateTotals = () => {
-//     return formData.items.reduce((acc, item) => ({
-//       totalCartons: acc.totalCartons + (item.cartons || 0),
-//       totalPairs: acc.totalPairs + (item.totalPair || 0),
-//       totalAmount: acc.totalAmount + (item.amount || 0)
-//     }), { totalCartons: 0, totalPairs: 0, totalAmount: 0 });
-//   };
-
-
-// const handleSubmit = async (e) => {
-//   e.preventDefault();
-//   setSaving(true);
-//   let challanCreated = false;
-
-//   try {
-//     // Basic form validation
-//     if (!formData.partyName || !formData.station || !formData.transport) {
-//       throw new Error('Please fill all required fields');
-//     }
-
-//     for (let item of formData.items) {
-//       if (!item.article || !item.size || !item.color || !item.cartons || !item.rate) {
-//         throw new Error('Please fill all item details');
-//       }
-//     }
-
-//     // Stock check
-//     const stockCheckPayload = formData.items.map(item => ({
-//       article: item.article.trim().toUpperCase(),
-//       size: item.size.trim(),
-//       color: item.color.trim().toUpperCase(),
-//       requiredCartons: item.cartons
-//     }));
-
-//     const stockResponse = await api.post('/challans/stock-check', stockCheckPayload);
-//     if (stockResponse.data.hasErrors) {
-//       stockResponse.data.errors.forEach(error => {
-//         toast.error(`Stock Issue: ${error.message}`, { 
-//           autoClose: 10000,
-//           position: 'top-center'
-//         });
-//       });
-//       throw new Error('Cannot create challan due to stock issues');
-//     }
-
-//     // Challan creation
-//     const payload = {
-//       ...formData,
-//       items: formData.items.map(item => ({
-//         article: item.article.toUpperCase(),
-//         color: item.color.toUpperCase(),
-//         size: item.size,
-//         cartons: Number(item.cartons),
-//         pairPerCarton: Number(item.pairPerCarton),
-//         rate: Number(item.rate),
-//         totalPair: Number(item.cartons) * Number(item.pairPerCarton),
-//         amount: Number(item.cartons) * Number(item.pairPerCarton) * Number(item.rate)
-//       }))
-//     };
-
-//     const response = await api.post('/challans', payload);
-//     console.log('Challan creation response:', response.data); // Debug log
-    
-//     if (!response.data.success) {
-//       throw new Error(response.data.error || 'Failed to create challan');
-//     }
-    
-//     challanCreated = true;
-//     toast.success('Challan created successfully!');
-
-//     // PDF handling with proper ID extraction
-//     try {
-//       await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay
-      
-//       // ✅ Same ID extraction as ChallanList
-//       const challanId = response.data.data?._id || 
-//                        response.data.data?.id || 
-//                        response.data._id || 
-//                        response.data.id;
-      
-//       console.log('PDF Generation Challan ID:', challanId);
-      
-//       if (!challanId) {
-//         throw new Error('Challan ID not found in response');
-//       }
-
-//       const pdfResponse = await api.get(`/challan-pdf/${challanId}`, {
-//         responseType: 'blob',
-//         timeout: 45000 // Extended timeout
-//       });
-
-//       // Enhanced PDF validation
-//       if (!pdfResponse.data || pdfResponse.data.size < 1024) {
-//         throw new Error('Invalid PDF received from server');
-//       }
-
-//       // ✅ Same filename logic as ChallanList
-//       const safeInvoiceNo = formData.invoiceNo.replace(/\//g, '-');
-//       const filename = `challan-${safeInvoiceNo}.pdf`;
-
-//       const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
-//       const url = window.URL.createObjectURL(blob);
-      
-//       const link = document.createElement('a');
-//       link.href = url;
-//       link.setAttribute('download', filename);
-//       document.body.appendChild(link);
-//       link.click();
-
-//       // Cleanup
-//       document.body.removeChild(link);
-//       window.URL.revokeObjectURL(url);
-      
-//       toast.success('PDF downloaded successfully!');
-      
-//     } catch (pdfErr) {
-//       console.error('PDF Error Details:', {
-//         message: pdfErr.message,
-//         status: pdfErr.response?.status,
-//         data: pdfErr.response?.data
-//       });
-//       toast.warning(pdfErr.response?.status === 404 ? 
-//         'PDF generation service unavailable' : 
-//         'Challan created but PDF download failed'
-//       );
-//     }
-
-//     // Form reset logic
-//     try {
-//       const newInvoiceRes = await api.get('/challans/latest-invoice');
-//       const nextNumber = (newInvoiceRes.data.invoice || 0) + 1;
-      
-//       setFormData({
-//         partyName: '',
-//         date: new Date().toISOString().split('T')[0],
-//         invoiceNo: `${nextNumber}/${new Date().getFullYear()}`,
-//         station: '',
-//         transport: '',
-//         marka: '',
-//         items: [{
-//           article: '',
-//           size: '',
-//           color: '',
-//           cartons: 1,
-//           pairPerCarton: 0,
-//           rate: 0,
-//           totalPair: 0,
-//           amount: 0
-//         }]
-//       });
-//     } catch (resetErr) {
-//       console.error('Reset Error:', resetErr);
-//       toast.warning('Invoice number reset failed');
-//     }
-
-//     navigate('/challans');
-
-//   } catch (err) {
-//     console.error('Submit Error:', err);
-//     const errorMessage = challanCreated ? 
-//       'Challan created but post-creation actions failed' : 
-//       err.response?.data?.error || err.message;
-      
-//     toast.error(errorMessage, { 
-//       position: 'top-center',
-//       autoClose: 5000
-//     });
-//   } finally {
-//     setSaving(false);
-//   }
-// };
-
-//   const totals = calculateTotals();
-
-//   return (
-//     <div className="container mt-4">
-//       <h2>Create New Challan</h2>
-//       <form onSubmit={handleSubmit}>
-//         <div className="card mb-3">
-//           <div className="card-body">
-//             <div className="row g-3">
-//               <div className="col-md-4">
-//                 <label>Party Name *</label>
-//                 <input
-//                   type="text"
-//                   className="form-control"
-//                   value={formData.partyName}
-//                   onChange={(e) => setFormData(prev => ({...prev, partyName: e.target.value}))}
-//                   required
-//                 />
-//               </div>
-              
-//               <div className="col-md-4">
-//                 <label>Invoice No *</label>
-//                 <input
-//                   type="text"
-//                   className="form-control"
-//                   value={formData.invoiceNo}
-//                   readOnly
-//                 />
-//               </div>
-
-//               <div className="col-md-4">
-//                 <label>Date *</label>
-//                 <input
-//                   type="date"
-//                   className="form-control"
-//                   value={formData.date}
-//                   onChange={(e) => setFormData(prev => ({...prev, date: e.target.value}))}
-//                   required
-//                 />
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-
-//         <div className="card mb-3">
-//           <div className="card-body">
-//             <div className="table-responsive">
-//               <table className="table table-bordered">
-//                 <thead>
-//                   <tr>
-//                     <th>Article *</th>
-//                     <th>Size *</th>
-//                     <th>Color *</th>
-//                     <th>Cartons *</th>
-//                     <th>Pair/Crtn</th>
-//                     <th>Rate *</th>
-//                     <th>Amount</th>
-//                     <th>Action</th>
-//                   </tr>
-//                 </thead>
-//                 <tbody>
-//                   {formData.items.map((item, index) => {
-//                     const variants = articleVariants[index] || [];
-//                     const sizes = [...new Set(variants.map(v => v.size))];
-//                     const colors = [...new Set(variants.filter(v => v.size === item.size).map(v => v.color))];
-
-//                     return (
-//                       <tr key={index}>
-                        
-//                          <td>
-//   <input
-//     type="text"
-//     className="form-control"
-//     value={item.article}
-//     onChange={(e) => handleItemChange(index, e)}
-//     onBlur={() => {
-//       const article = formData.items[index].article.trim();
-//       if (article) {
-//         fetchArticleVariants(article, index, true); // isBlur = true
-//       }
-//     }}
-//     name="article"
-//     placeholder="Enter article"
-//     required
-//   />
-//   {loadingVariants[index] && <small className="text-info">Loading...</small>}
-// </td>
-
-                        
-                        
-//                         <td>
-//                           <select
-//                             className="form-select"
-//                             value={item.size}
-//                             onChange={(e) => handleItemChange(index, e)}
-//                             name="size"
-//                             required
-//                             disabled={!variants.length}
-//                           >
-//                             <option value="">Select Size</option>
-//                             {sizes.map(size => (
-//                               <option key={size} value={size}>{size}</option>
-//                             ))}
-//                           </select>
-//                         </td>
-
-//                         <td>
-//                           <select
-//                             className="form-select"
-//                             value={item.color}
-//                             onChange={(e) => handleItemChange(index, e)}
-//                             name="color"
-//                             required
-//                             disabled={!item.size}
-//                           >
-//                             <option value="">Select Color</option>
-//                             {colors.map(color => (
-//                               <option key={color} value={color}>{color}</option>
-//                             ))}
-//                           </select>
-//                         </td>
-
-//                         <td>
-//                           <input
-//                             type="number"
-//                             className="form-control no-spinner"
-//                             value={item.cartons}
-//                             onChange={(e) => handleItemChange(index, e)}
-//                             name="cartons"
-//                             min="1"
-//                             required
-//                           />
-//                         </td>
-
-//                         <td>
-//                           <input
-//                             type="number"
-//                             className="form-control"
-//                             value={item.pairPerCarton}
-//                             readOnly
-//                           />
-//                         </td>
-
-//                         <td>
-//                           <input
-//                             type="number"
-//                             className="form-control"
-//                             value={item.rate}
-//                             onChange={(e) => handleItemChange(index, e)}
-//                             name="rate"
-//                             step="0.01"
-//                             min="0"
-//                             required
-//                           />
-//                         </td>
-
-//                         <td>
-//                           <input
-//                             type="number"
-//                             className="form-control"
-//                             value={item.amount.toFixed(2)}
-//                             readOnly
-//                           />
-//                         </td>
-
-//                         <td>
-//                           <button
-//                             type="button"
-//                             className="btn btn-danger btn-sm"
-//                             onClick={() => removeItemRow(index)}
-//                             disabled={formData.items.length === 1}
-//                           >
-//                             <FaTrash />
-//                           </button>
-//                         </td>
-//                       </tr>
-//                     )
-//                   })}
-//                 </tbody>
-//               </table>
-//             </div>
-            
-//             <button
-//               type="button"
-//               className="btn btn-primary mt-2"
-//               onClick={addItemRow}
-//             >
-//               <FaPlus /> Add Item
-//             </button>
-//           </div>
-//         </div>
-
-//         <div className="card mb-3">
-//           <div className="card-body">
-//             <div className="row g-3">
-//               <div className="col-md-4">
-//                 <label>Station *</label>
-//                 <input
-//                   type="text"
-//                   className="form-control"
-//                   value={formData.station}
-//                   onChange={(e) => setFormData(prev => ({...prev, station: e.target.value}))}
-//                   required
-//                 />
-//               </div>
-              
-//               <div className="col-md-4">
-//                 <label>Transport *</label>
-//                 <input
-//                   type="text"
-//                   className="form-control"
-//                   value={formData.transport}
-//                   onChange={(e) => setFormData(prev => ({...prev, transport: e.target.value}))}
-//                   required
-//                 />
-//               </div>
-
-//               <div className="col-md-4">
-//                 <label>Marka</label>
-//                 <input
-//                   type="text"
-//                   className="form-control"
-//                   value={formData.marka}
-//                   onChange={(e) => setFormData(prev => ({...prev, marka: e.target.value}))}
-//                 />
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-
-//         <div className="card mb-3">
-//           <div className="card-body">
-//             <div className="row">
-//               <div className="col-md-4">
-//                 <h5>Total Cartons: {totals.totalCartons}</h5>
-//               </div>
-//               <div className="col-md-4">
-//                 <h5>Total Pairs: {totals.totalPairs}</h5>
-//               </div>
-//               <div className="col-md-4">
-//                 <h5>Total Amount: ₹{totals.totalAmount.toFixed(2)}</h5>
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-
-//         <div className="d-flex justify-content-between">
-//           <button
-//             type="button"
-//             className="btn btn-secondary"
-//             onClick={() => navigate('/challans')}
-//             disabled={saving}
-//           >
-//             <FaTimes /> Cancel
-//           </button>
-          
-//           <button
-//             type="submit"
-//             className="btn btn-primary"
-//             disabled={saving}
-//           >
-//             {saving ? (
-//               <>
-//                 <FaSpinner className="fa-spin me-1" />
-//                 Creating...
-//               </>
-//             ) : (
-//               <>
-//                 <FaSave className="me-1" />
-//                 Create Challan
-//               </>
-//             )}
-//           </button>
-//         </div>
-//       </form>
-//     </div>
-//   );
-// };
-
-// export default ChallanForm;
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FaPlus, FaTrash, FaSave, FaTimes, FaSpinner } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSave, FaTimes, FaSpinner, FaFilePdf, FaImages } from 'react-icons/fa';
 import api from '../utils/api';
 import './ChallanForm.css';
 
 const ChallanForm = () => {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingProductsPDF, setDownloadingProductsPDF] = useState(false);
   const [articleVariants, setArticleVariants] = useState({});
   const [loadingVariants, setLoadingVariants] = useState({});
   const [stockAvailability, setStockAvailability] = useState({});
+  const [lastCreatedChallanId, setLastCreatedChallanId] = useState(null);
 
   const [formData, setFormData] = useState({
     partyName: '',
@@ -657,7 +27,7 @@ const ChallanForm = () => {
       article: '',
       size: '',
       color: '',
-      cartons: 1,
+      cartons: '',
       pairPerCarton: 0,
       rate: 0,
       totalPair: 0,
@@ -735,7 +105,7 @@ const ChallanForm = () => {
       const res = await api.get('/challans/stock-available', {
         params: {
           article: article.trim().toUpperCase(),
-          size: size.trim(), // size को बिलकुल unchanged भेजो!
+          size: size.trim(),
           color: color.trim().toUpperCase()
         }
       });
@@ -798,12 +168,28 @@ const ChallanForm = () => {
       const { article, size, color } = newItems[index];
       fetchStockAvailability(
         (article || '').trim().toUpperCase(),
-        (size || '').trim(), // size को unchanged भेजो!
+        (size || '').trim(),
         (color || '').trim().toUpperCase(),
         index
       );
     }
-    // ----------------------------------------------
+
+    if (name === 'cartons') {
+      const cartonsVal = parseInt(value) || 0;
+      const available = stockAvailability[index] ?? 0;
+
+      if (cartonsVal < 0) {
+        toast.warning('Cartons negative नहीं हो सकते', { position: 'top-center' });
+        return;
+      }
+      
+      if (cartonsVal > available && available > 0) {
+        toast.warning(`Available से ज्यादा cartons नहीं डाल सकते! Available: ${available}`);
+        return;
+      }
+
+      newItems[index].cartons = cartonsVal;
+    }
 
     newItems[index].totalPair = newItems[index].cartons * newItems[index].pairPerCarton;
     newItems[index].amount = newItems[index].totalPair * newItems[index].rate;
@@ -818,7 +204,7 @@ const ChallanForm = () => {
         article: '',
         size: '',
         color: '',
-        cartons: 1,
+        cartons: '',
         pairPerCarton: 0,
         rate: 0,
         totalPair: 0,
@@ -844,432 +230,792 @@ const ChallanForm = () => {
 
   const calculateTotals = () => {
     return formData.items.reduce((acc, item) => ({
-      totalCartons: acc.totalCartons + (item.cartons || 0),
+     // totalCartons: acc.totalCartons + (item.cartons || 0),
+     totalCartons: acc.totalCartons + (parseInt(item.cartons) || 0),
       totalPairs: acc.totalPairs + (item.totalPair || 0),
       totalAmount: acc.totalAmount + (item.amount || 0)
     }), { totalCartons: 0, totalPairs: 0, totalAmount: 0 });
   };
-const downloadChallanPDF = async (challanId, invoiceNo) => {
-  try {
-    const pdfResponse = await api.get(`/challan-pdf/${challanId}`, {
-      responseType: 'blob',
-      timeout: 45000
-    });
-    if (!pdfResponse.data || pdfResponse.data.size < 1024) {
-      throw new Error('Invalid PDF received from server');
+
+  // ✅ Regular Challan PDF Download
+  const downloadChallanPDF = async (challanId, invoiceNo) => {
+    setDownloadingPDF(true);
+    try {
+      console.log('Downloading regular challan PDF for:', challanId);
+      
+      const pdfResponse = await api.get(`/challan-pdf/${challanId}`, {
+        responseType: 'blob',
+        timeout: 45000,
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      });
+      
+      if (!pdfResponse.data || pdfResponse.data.size < 1024) {
+        throw new Error('Invalid PDF received from server');
+      }
+      
+      const safeInvoiceNo = invoiceNo.replace(/\//g, '-');
+      const filename = `challan-${safeInvoiceNo}.pdf`;
+      const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Challan PDF downloaded successfully!');
+    } catch (err) {
+      console.error('Challan PDF Error:', err);
+      toast.error(
+        err.response?.status === 404
+          ? 'PDF generation service unavailable'
+          : 'Challan PDF download failed: ' + err.message
+      );
+    } finally {
+      setDownloadingPDF(false);
     }
-    const safeInvoiceNo = invoiceNo.replace(/\//g, '-');
-    const filename = `challan-${safeInvoiceNo}.pdf`;
-    const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    toast.success('PDF downloaded successfully!');
-  } catch (err) {
-    toast.warning(
-      err.response?.status === 404
-        ? 'PDF generation service unavailable'
-        : 'Challan created but PDF download failed'
-    );
-  }
-};
+  };
+
+  // ✅ Products PDF Download Function
+  const downloadProductsPDF = async (challanId, invoiceNo) => {
+    setDownloadingProductsPDF(true);
+    try {
+      console.log('Downloading products PDF for challan:', challanId);
+      
+      const pdfResponse = await api.get(`/challan-pdf/${challanId}/products`, {
+        responseType: 'blob',
+        timeout: 60000, // Longer timeout for products PDF
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      });
+      
+      console.log('Products PDF response:', {
+        size: pdfResponse.data.size,
+        type: pdfResponse.data.type
+      });
+      
+      if (!pdfResponse.data || pdfResponse.data.size < 1024) {
+        throw new Error('Invalid products PDF received from server');
+      }
+      
+      const safeInvoiceNo = invoiceNo.replace(/\//g, '-');
+      const filename = `challan-products-${safeInvoiceNo}.pdf`;
+      
+      const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      link.style.display = 'none';
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success('Products PDF downloaded successfully!');
+    } catch (err) {
+      console.error('Products PDF Error:', err);
+      toast.error(
+        err.response?.status === 404
+          ? 'Products not found for this challan'
+          : 'Products PDF download failed: ' + err.message
+      );
+    } finally {
+      setDownloadingProductsPDF(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setSaving(true);
-  let challanCreated = false;
+    e.preventDefault();
+    setSaving(true);
+    let challanCreated = false;
 
-  try {
-    // 1. Validation
-    if (!formData.partyName || !formData.station || !formData.transport) {
-      throw new Error('Please fill all required fields');
-    }
-
-    for (let item of formData.items) {
-      if (!item.article || !item.size || !item.color || !item.cartons || !item.rate) {
-        throw new Error('Please fill all item details');
-      }
-    }
-
-    // 2. Stock check
-    const stockCheckPayload = formData.items.map(item => ({
-      article: item.article.trim().toUpperCase(),
-      size: item.size.trim(),
-      color: item.color.trim().toUpperCase(),
-      requiredCartons: item.cartons
-    }));
-
-    const stockResponse = await api.post('/challans/stock-check', stockCheckPayload);
-    if (stockResponse.data.hasErrors) {
-      stockResponse.data.errors.forEach(error => {
-        toast.error(`Stock Issue: ${error.message}`, {
-          autoClose: 10000,
-          position: 'top-center'
-        });
-      });
-      throw new Error('Cannot create challan due to stock issues');
-    }
-
-    // 3. Challan creation
-    const payload = {
-      ...formData,
-      items: formData.items.map(item => ({
-        article: item.article.toUpperCase(),
-        color: item.color.toUpperCase(),
-        size: item.size,
-        cartons: Number(item.cartons),
-        pairPerCarton: Number(item.pairPerCarton),
-        rate: Number(item.rate),
-        totalPair: Number(item.cartons) * Number(item.pairPerCarton),
-        amount: Number(item.cartons) * Number(item.pairPerCarton) * Number(item.rate)
-      }))
-    };
-
-    const response = await api.post('/challans', payload);
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Failed to create challan');
-    }
-
-    challanCreated = true;
-    toast.success('Challan created successfully!');
-
-    // 4. PDF Download Logic
     try {
-      // 4.1 Challan ID extract karo
+      // 1. Validation
+      if (!formData.partyName || !formData.station || !formData.transport) {
+        throw new Error('Please fill all required fields');
+      }
+
+      for (let item of formData.items) {
+        if (!item.article || !item.size || !item.color || !item.cartons ||item.cartons === 0 || !item.rate) {
+          throw new Error('Please fill all item details');
+        }
+      }
+
+      // 2. Stock check
+      const stockCheckPayload = formData.items.map(item => ({
+        article: item.article.trim().toUpperCase(),
+        size: item.size.trim(),
+        color: item.color.trim().toUpperCase(),
+        requiredCartons: item.cartons
+      }));
+
+      const stockResponse = await api.post('/challans/stock-check', stockCheckPayload);
+      if (stockResponse.data.hasErrors) {
+        stockResponse.data.errors.forEach(error => {
+          toast.error(`Stock Issue: ${error.message}`, {
+            autoClose: 10000,
+            position: 'top-center'
+          });
+        });
+        throw new Error('Cannot create challan due to stock issues');
+      }
+
+      // 3. Challan creation
+      const payload = {
+        ...formData,
+        items: formData.items.map(item => ({
+          article: item.article.toUpperCase(),
+          color: item.color.toUpperCase(),
+          size: item.size,
+          cartons: Number(item.cartons),
+          pairPerCarton: Number(item.pairPerCarton),
+          rate: Number(item.rate),
+          totalPair: Number(item.cartons) * Number(item.pairPerCarton),
+          amount: Number(item.cartons) * Number(item.pairPerCarton) * Number(item.rate)
+        }))
+      };
+
+      const response = await api.post('/challans', payload);
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to create challan');
+      }
+
+      challanCreated = true;
       const challanId = response.data.data?._id ||
-                        response.data.data?.id ||
-                        response.data._id ||
-                        response.data.id;
+                      response.data.data?.id ||
+                      response.data._id ||
+                      response.data.id;
+
       if (!challanId) {
         throw new Error('Challan ID not found in response');
       }
 
-      // 4.2 PDF download trigger karo
-      await downloadChallanPDF(challanId, formData.invoiceNo);
-    } catch (pdfErr) {
-      // Agar PDF download fail ho jaye toh warning dikhao
-      toast.warning(
-        pdfErr.response?.status === 404
-          ? 'PDF generation service unavailable'
-          : 'Challan created but PDF download failed'
+      setLastCreatedChallanId(challanId);
+      toast.success('Challan created successfully! 🎉');
+
+      // 4. Auto-download regular PDF
+      try {
+        await downloadChallanPDF(challanId, formData.invoiceNo);
+      } catch (pdfErr) {
+        console.error('Auto PDF download failed:', pdfErr);
+        toast.warning('Challan created but auto PDF download failed');
+      }
+
+      // 5. Form reset logic
+      try {
+        const newInvoiceRes = await api.get('/challans/latest-invoice');
+        const nextNumber = (newInvoiceRes.data.invoice || 0) + 1;
+
+        setFormData({
+          partyName: '',
+          date: new Date().toISOString().split('T')[0],
+          invoiceNo: `${nextNumber}/${new Date().getFullYear()}`,
+          station: '',
+          transport: '',
+          marka: '',
+          items: [{
+            article: '',
+            size: '',
+            color: '',
+            cartons: '',
+            pairPerCarton: 0,
+            rate: 0,
+            totalPair: 0,
+            amount: 0
+          }]
+        });
+        setStockAvailability({});
+        setArticleVariants({});
+      } catch (resetErr) {
+        toast.warning('Invoice number reset failed');
+      }
+
+      // Show success message with PDF options
+      toast.success(
+        <div>
+          <strong>Challan Created Successfully!</strong>
+          <br />
+          <small>You can now download products PDF from the buttons below.</small>
+        </div>,
+        { autoClose: 5000 }
       );
-    }
 
-    // 5. Form reset logic
-    try {
-      const newInvoiceRes = await api.get('/challans/latest-invoice');
-      const nextNumber = (newInvoiceRes.data.invoice || 0) + 1;
+    } catch (err) {
+      const errorMessage = challanCreated
+        ? 'Challan created but post-creation actions failed'
+        : err.response?.data?.error || err.message;
 
-      setFormData({
-        partyName: '',
-        date: new Date().toISOString().split('T')[0],
-        invoiceNo: `${nextNumber}/${new Date().getFullYear()}`,
-        station: '',
-        transport: '',
-        marka: '',
-        items: [{
-          article: '',
-          size: '',
-          color: '',
-          cartons: 1,
-          pairPerCarton: 0,
-          rate: 0,
-          totalPair: 0,
-          amount: 0
-        }]
+      toast.error(errorMessage, {
+        position: 'top-center',
+        autoClose: 5000
       });
-      setStockAvailability({});
-      setArticleVariants({});
-    } catch (resetErr) {
-      toast.warning('Invoice number reset failed');
+    } finally {
+      setSaving(false);
     }
-
-    navigate('/challans');
-
-  } catch (err) {
-    const errorMessage = challanCreated
-      ? 'Challan created but post-creation actions failed'
-      : err.response?.data?.error || err.message;
-
-    toast.error(errorMessage, {
-      position: 'top-center',
-      autoClose: 5000
-    });
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const totals = calculateTotals();
 
+  // Party suggestions
+  const [partySuggestions, setPartySuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const fetchPartyNames = async (search) => {
+    if (!search) {
+      setPartySuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      const res = await api.get(`/challans/party-names?search=${search}`);
+      setPartySuggestions(res.data.data);
+      setShowSuggestions(true);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Article suggestions
+  const [articleSuggestions, setArticleSuggestions] = useState({});
+  const [showArticleDropdown, setShowArticleDropdown] = useState({});
+
+  const fetchArticleSuggestions = async (search, index) => {
+    if (!search) {
+      setArticleSuggestions(prev => ({ ...prev, [index]: [] }));
+      return;
+    }
+    try {
+      const res = await api.get(`/challans/article-suggestions?search=${search}`);
+      setArticleSuggestions(prev => ({ ...prev, [index]: res.data.data }));
+      setShowArticleDropdown(prev => ({ ...prev, [index]: true }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
-    <div className="container mt-4">
-      <h2>Create New Challan</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="card mb-3">
-          <div className="card-body">
-            <div className="row g-3">
-              <div className="col-md-4">
-                <label>Party Name *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.partyName}
-                  onChange={(e) => setFormData(prev => ({...prev, partyName: e.target.value}))}
-                  required
-                />
+    <div className="challan-wrapper">
+      <div className="container mt-4">
+        {/* ✅ Enhanced Header */}
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <div>
+            <h2 className="text-primary mb-1">
+              <FaFilePdf className="me-2" />
+              Create New Challan
+            </h2>
+            <p className="text-muted mb-0">Fill in the details to generate challan and products PDF</p>
+          </div>
+          
+          {/* ✅ PDF Download Actions - Show only after challan creation */}
+          {lastCreatedChallanId && (
+            <div className="pdf-actions">
+              <div className="btn-group" role="group">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => downloadChallanPDF(lastCreatedChallanId, formData.invoiceNo)}
+                  disabled={downloadingPDF}
+                >
+                  {downloadingPDF ? (
+                    <><FaSpinner className="fa-spin me-1" />Downloading...</>
+                  ) : (
+                    <><FaFilePdf className="me-1" />Download Challan PDF</>
+                  )}
+                </button>
+                
+                <button
+                  type="button"
+                  className="btn btn-outline-success"
+                  onClick={() => downloadProductsPDF(lastCreatedChallanId, formData.invoiceNo)}
+                  disabled={downloadingProductsPDF}
+                >
+                  {downloadingProductsPDF ? (
+                    <><FaSpinner className="fa-spin me-1" />Downloading...</>
+                  ) : (
+                    <><FaImages className="me-1" />Download Products PDF</>
+                  )}
+                </button>
               </div>
-              <div className="col-md-4">
-                <label>Invoice No *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.invoiceNo}
-                  readOnly
-                />
+              
+              <div className="mt-2">
+                <small className="text-muted">
+                  ✅ Last created: Invoice #{formData.invoiceNo}
+                </small>
               </div>
-              <div className="col-md-4">
-                <label>Date *</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={formData.date}
-                  onChange={(e) => setFormData(prev => ({...prev, date: e.target.value}))}
-                  required
-                />
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {/* ✅ Party Details Card */}
+          <div className="card mb-4 shadow-sm">
+            <div className="card-header bg-light">
+              <h5 className="mb-0 text-dark">
+                📋 Party Information
+              </h5>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-md-4">
+                  <label className="form-label fw-bold">Party Name *</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.partyName}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setFormData(prev => ({...prev, partyName: val}));
+                        fetchPartyNames(val);
+                      }}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      onFocus={() => {
+                        if (partySuggestions.length) setShowSuggestions(true);
+                      }}
+                      placeholder="Enter party name"
+                      required
+                    />
+
+                    {showSuggestions && partySuggestions.length > 0 && (
+                      <ul style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        width: "100%",
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                        border: "1px solid #ddd",
+                        background: "#fff",
+                        zIndex: 1000,
+                        listStyle: "none",
+                        padding: 0,
+                        margin: 0,
+                        borderRadius: "0 0 8px 8px",
+                        boxShadow: "0 4px 8px rgba(0,0,0,0.1)"
+                      }}>
+                        {partySuggestions.map((name, idx) => (
+                          <li
+                            key={idx}
+                            onMouseDown={() => {
+                              setFormData(prev => ({...prev, partyName: name}));
+                              setShowSuggestions(false);
+                            }}
+                            style={{ 
+                              padding: "12px 16px", 
+                              cursor: "pointer",
+                              borderBottom: idx < partySuggestions.length - 1 ? "1px solid #f0f0f0" : "none"
+                            }}
+                            onMouseOver={e => e.currentTarget.style.background = "#f8f9fa"}
+                            onMouseOut={e => e.currentTarget.style.background = "#fff"}
+                          >
+                            {name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label fw-bold">Invoice No *</label>
+                  <input
+                    type="text"
+                    className="form-control bg-light"
+                    value={formData.invoiceNo}
+                    readOnly
+                  />
+                  <small className="text-muted">Auto-generated</small>
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label fw-bold">Date *</label>
+                  <input
+                    type="date"
+                    className="form-control bg-light"
+                    value={formData.date}
+                    readOnly 
+                  />
+                  <small className="text-muted">Today's date</small>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="card mb-3">
-          <div className="card-body">
-            <div className="table-responsive">
-              <table className="table table-bordered">
-                <thead>
-                  <tr>
-                    <th>Article *</th>
-                    <th>Size *</th>
-                    <th>Color *</th>
-                    <th>Cartons *</th>
-                    <th>Pair/Crtn</th>
-                    <th>Rate *</th>
-                    <th>Amount</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formData.items.map((item, index) => {
-                    const variants = articleVariants[index] || [];
-                    const sizes = [...new Set(variants.map(v => v.size))];
-                    const colors = [...new Set(variants.filter(v => v.size === item.size).map(v => v.color))];
-
-                    return (
-                      <tr key={index}>
-                        <td>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={item.article}
-                            onChange={(e) => handleItemChange(index, e)}
-                            onBlur={() => {
-                              const article = formData.items[index].article.trim();
-                              if (article) {
-                                fetchArticleVariants(article, index, true);
-                              }
-                            }}
-                            name="article"
-                            placeholder="Enter article"
-                            required
-                          />
-                          {loadingVariants[index] && <small className="text-info">Loading...</small>}
-                        </td>
-                        <td>
-                          <select
-                            className="form-select"
-                            value={item.size}
-                            onChange={(e) => handleItemChange(index, e)}
-                            name="size"
-                            required
-                            disabled={!variants.length}
-                          >
-                            <option value="">Select Size</option>
-                            {sizes.map(size => (
-                              <option key={size} value={size}>{size}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            className="form-select"
-                            value={item.color}
-                            onChange={(e) => handleItemChange(index, e)}
-                            name="color"
-                            required
-                            disabled={!item.size}
-                          >
-                            <option value="">Select Color</option>
-                            {colors.map(color => (
-                              <option key={color} value={color}>{color}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-control no-spinner"
-                            value={item.cartons}
-                            onChange={(e) => handleItemChange(index, e)}
-                            name="cartons"
-                            min="1"
-                            required
-                          />
-                          {/* ----------- Available Feature UI ----------- */}
-                          <small className="text-muted">
-                            Available: {stockAvailability[index] ?? '-'}
-                          </small>
-                          {/* ------------------------------------------ */}
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={item.pairPerCarton}
-                            readOnly
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={item.rate}
-                            onChange={(e) => handleItemChange(index, e)}
-                            name="rate"
-                            step="0.01"
-                            min="0"
-                            required
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={item.amount.toFixed(2)}
-                            readOnly
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            onClick={() => removeItemRow(index)}
-                            disabled={formData.items.length === 1}
-                          >
-                            <FaTrash />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+          {/* ✅ Items Table Card */}
+          <div className="card mb-4 shadow-sm">
+            <div className="card-header bg-light d-flex justify-content-between align-items-center">
+              <h5 className="mb-0 text-dark">
+                📦 Product Items
+              </h5>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={addItemRow}
+              >
+                <FaPlus className="me-1" /> Add Item
+              </button>
             </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-hover mb-0">
+                  <thead className="table-dark">
+                    <tr>
+                      <th>Article *</th>
+                      <th>Size *</th>
+                      <th>Color *</th>
+                      <th>Cartons *</th>
+                      <th>Pair/Crtn</th>
+                      <th>Rate *</th>
+                      <th>Amount</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {formData.items.map((item, index) => {
+                      const variants = articleVariants[index] || [];
+                      const sizes = [...new Set(variants.map(v => v.size))];
+                      const colors = [...new Set(variants.filter(v => v.size === item.size).map(v => v.color))];
+
+                      return (
+                        <tr key={index} className={index % 2 === 0 ? 'table-light' : ''}>
+                          {/* Article input with dropdown */}
+                          <td style={{ position: "relative", minWidth: "180px" }}>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              value={item.article}
+                              onChange={(e) => {
+                                handleItemChange(index, e);
+                                fetchArticleSuggestions(e.target.value.toUpperCase(), index);
+                              }}
+                              onBlur={() => setTimeout(() => setShowArticleDropdown(prev => ({ ...prev, [index]: false })), 200)}
+                              onFocus={() => {
+                                if (articleSuggestions[index]?.length) {
+                                  setShowArticleDropdown(prev => ({ ...prev, [index]: true }));
+                                }
+                              }}
+                              name="article"
+                              placeholder="Enter article"
+                              autoComplete="off"
+                              required
+                            />
+                            {showArticleDropdown[index] && articleSuggestions[index]?.length > 0 && (
+                              <ul
+                                style={{
+                                  position: "absolute",
+                                  top: "100%",
+                                  left: 0,
+                                  width: "100%",
+                                  maxHeight: "200px",
+                                  overflowY: "auto",
+                                  border: "1px solid #ddd",
+                                  background: "#fff",
+                                  zIndex: 9999,
+                                  listStyle: "none",
+                                  padding: 0,
+                                  margin: 0,
+                                  borderRadius: "0 0 8px 8px",
+                                  boxShadow: "0 4px 8px rgba(0,0,0,0.15)"
+                                }}
+                              >
+                                {articleSuggestions[index].map((art, i) => (
+                                  <li
+                                    key={i}
+                                    onMouseDown={() => {
+                                      const dummyEvent = { target: { name: "article", value: art } };
+                                      handleItemChange(index, dummyEvent);
+                                      setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                      fetchArticleVariants(art, index, true);
+                                    }}
+                                    style={{
+                                      padding: "8px 12px",
+                                      cursor: "pointer",
+                                      borderBottom: i < articleSuggestions[index].length - 1 ? "1px solid #f0f0f0" : "none"
+                                    }}
+                                    onMouseOver={e => e.currentTarget.style.background = "#f8f9fa"}
+                                    onMouseOut={e => e.currentTarget.style.background = "#fff"}
+                                  >
+                                    {art}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {loadingVariants[index] && (
+                              <small className="text-info">
+                                <FaSpinner className="fa-spin me-1" />Loading...
+                              </small>
+                            )}
+                          </td>
+
+                          <td>
+                            <select
+                              className="form-select form-select-sm"
+                              value={item.size}
+                              onChange={(e) => handleItemChange(index, e)}
+                              name="size"
+                              required
+                              disabled={!variants.length}
+                            >
+                              <option value="">Select Size</option>
+                              {sizes.map(size => (
+                                <option key={size} value={size}>{size}</option>
+                              ))}
+                            </select>
+                          </td>
+
+                          <td>
+                            <select
+                              className="form-select form-select-sm"
+                              value={item.color}
+                              onChange={(e) => handleItemChange(index, e)}
+                              name="color"
+                              required
+                              disabled={!item.size}
+                            >
+                              <option value="">Select Color</option>
+                              {colors.map(color => (
+                                <option key={color} value={color}>{color}</option>
+                              ))}
+                            </select>
+                          </td>
+
+                          <td>
+                            <input
+                              type="number"
+                              className="form-control form-control-sm"
+                              value={item.cartons}
+                              onChange={(e) => handleItemChange(index, e)}
+                              name="cartons"
+                              min="0"
+                              required
+                              style={{ maxWidth: "80px" }}
+                            />
+                            <small className={`text-${stockAvailability[index] > 0 ? 'success' : 'muted'}`}>
+                              Available: {stockAvailability[index] ?? '-'}
+                            </small>
+                          </td>
+
+                          <td>
+                            <input
+                              type="number"
+                              className="form-control form-control-sm bg-light"
+                              value={item.pairPerCarton}
+                              readOnly
+                              style={{ maxWidth: "80px" }}
+                            />
+                          </td>
+
+                          <td>
+                            <input
+                              type="number"
+                              className="form-control form-control-sm"
+                              value={item.rate}
+                              onChange={(e) => handleItemChange(index, e)}
+                              name="rate"
+                              step="0.01"
+                              min="0"
+                              required
+                              style={{ maxWidth: "100px" }}
+                            />
+                          </td>
+
+                          <td>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm bg-light fw-bold"
+                              value={`₹${item.amount.toFixed(2)}`}
+                              readOnly
+                              style={{ maxWidth: "120px" }}
+                            />
+                          </td>
+
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              onClick={() => removeItemRow(index)}
+                              disabled={formData.items.length === 1}
+                              title="Remove item"
+                            >
+                              <FaTrash />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* ✅ Transport Details Card */}
+          <div className="card mb-4 shadow-sm">
+            <div className="card-header bg-light">
+              <h5 className="mb-0 text-dark">
+                🚛 Transport Details
+              </h5>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                <div className="col-md-4">
+                  <label className="form-label fw-bold">Station *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formData.station}
+                    onChange={(e) => setFormData(prev => ({...prev, station: e.target.value}))}
+                    placeholder="Enter station"
+                    required
+                  />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label fw-bold">Transport *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formData.transport}
+                    onChange={(e) => setFormData(prev => ({...prev, transport: e.target.value}))}
+                    placeholder="Enter transport name"
+                    required
+                  />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label fw-bold">Marka</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formData.marka}
+                    onChange={(e) => setFormData(prev => ({...prev, marka: e.target.value}))}
+                    placeholder="Enter marka (optional)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ✅ Totals Summary Card */}
+          <div className="card mb-4 shadow-sm border-primary">
+            <div className="card-header bg-primary text-white">
+              <h5 className="mb-0">
+                📊 Order Summary
+              </h5>
+            </div>
+            <div className="card-body">
+              <div className="row text-center">
+                <div className="col-md-4">
+                  <div className="border-end">
+                    <h3 className="text-primary mb-1">{totals.totalCartons}</h3>
+                    <p className="text-muted mb-0">Total Cartons</p>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <div className="border-end">
+                    <h3 className="text-info mb-1">{totals.totalPairs}</h3>
+                    <p className="text-muted mb-0">Total Pairs</p>
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <h3 className="text-success mb-1">₹{totals.totalAmount.toFixed(2)}</h3>
+                  <p className="text-muted mb-0">Total Amount</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ✅ Action Buttons */}
+          <div className="d-flex justify-content-between align-items-center">
             <button
               type="button"
-              className="btn btn-primary mt-2"
-              onClick={addItemRow}
+              className="btn btn-outline-secondary btn-lg"
+              onClick={() => navigate('/challans')}
+              disabled={saving}
             >
-              <FaPlus /> Add Item
+              <FaTimes className="me-2" /> Cancel
             </button>
-          </div>
-        </div>
 
-        {/* ...rest of your form code remains the same... */}
-        <div className="card mb-3">
-          <div className="card-body">
-            <div className="row g-3">
-              <div className="col-md-4">
-                <label>Station *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.station}
-                  onChange={(e) => setFormData(prev => ({...prev, station: e.target.value}))}
-                  required
-                />
-              </div>
-              <div className="col-md-4">
-                <label>Transport *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.transport}
-                  onChange={(e) => setFormData(prev => ({...prev, transport: e.target.value}))}
-                  required
-                />
-              </div>
-              <div className="col-md-4">
-                <label>Marka</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.marka}
-                  onChange={(e) => setFormData(prev => ({...prev, marka: e.target.value}))}
-                />
-              </div>
+            <div className="d-flex gap-2">
+              {/* Show PDF download buttons if challan was created */}
+              {lastCreatedChallanId && !saving && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={() => downloadChallanPDF(lastCreatedChallanId, formData.invoiceNo)}
+                    disabled={downloadingPDF}
+                  >
+                    {downloadingPDF ? (
+                      <><FaSpinner className="fa-spin me-1" />Downloading...</>
+                    ) : (
+                      <><FaFilePdf className="me-1" />Download Challan</>
+                    )}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    className="btn btn-outline-success"
+                    onClick={() => downloadProductsPDF(lastCreatedChallanId, formData.invoiceNo)}
+                    disabled={downloadingProductsPDF}
+                  >
+                    {downloadingProductsPDF ? (
+                      <><FaSpinner className="fa-spin me-1" />Downloading...</>
+                    ) : (
+                      <><FaImages className="me-1" />Download Products</>
+                    )}
+                  </button>
+                </>
+              )}
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-lg px-4"
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <FaSpinner className="fa-spin me-2" />
+                    Creating Challan...
+                  </>
+                ) : (
+                  <>
+                    <FaSave className="me-2" />
+                    Create Challan
+                  </>
+                )}
+              </button>
             </div>
           </div>
-        </div>
 
-        <div className="card mb-3">
-          <div className="card-body">
-            <div className="row">
-              <div className="col-md-4">
-                <h5>Total Cartons: {totals.totalCartons}</h5>
-              </div>
-              <div className="col-md-4">
-                <h5>Total Pairs: {totals.totalPairs}</h5>
-              </div>
-              <div className="col-md-4">
-                <h5>Total Amount: ₹{totals.totalAmount.toFixed(2)}</h5>
+          {/* ✅ Status Messages */}
+          {lastCreatedChallanId && (
+            <div className="alert alert-success mt-3" role="alert">
+              <div className="d-flex align-items-center">
+                <div className="me-3">
+                  <i className="fas fa-check-circle fa-2x"></i>
+                </div>
+                <div>
+                  <h6 className="alert-heading mb-1">Challan Created Successfully!</h6>
+                  <p className="mb-0">
+                    Invoice #{formData.invoiceNo} has been created. 
+                    You can now download both regular challan and products PDF using the buttons above.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="d-flex justify-content-between">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => navigate('/challans')}
-            disabled={saving}
-          >
-            <FaTimes /> Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <FaSpinner className="fa-spin me-1" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <FaSave className="me-1" />
-                Create Challan
-              </>
-            )}
-          </button>
-        </div>
-      </form>
+          )}
+        </form>
+      </div>
     </div>
   );
 };

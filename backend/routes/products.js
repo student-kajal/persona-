@@ -13,7 +13,7 @@ const {
   importExcel,
   getStockHistory,
   getProductsByCategory,
-  getSalaryReport,
+//  getSalaryReport,
   getProductById,
   updateProduct,
   getDeletedProducts,
@@ -22,7 +22,9 @@ const {
   getArticleDetails ,
    getArticleGenderInfo,
   getArticleGenderSizeInfo,
-   getAllowedGendersForArticle
+   getAllowedGendersForArticle,
+   getAllUserEntriesForProduct,
+   
 } = require('../controllers/productController');
 
 
@@ -70,10 +72,12 @@ router.get('/suggestions', async (req, res) => {
 router.get('/smart-article-info', getArticleDetails); 
 
 router.get('/history', auth, getStockHistory);
-router.get('/salary-report', auth, getSalaryReport);
+//router.get('/salary-report', auth, getSalaryReport);
 router.get('/deleted', auth, getDeletedProducts);
 router.get('/category/:stockType/:gender', getProductsByCategory);
 
+// किसी product के लिए सभी user entries निकालने के लिए
+router.get('/:id/salary-entries', auth, getAllUserEntriesForProduct);
 
 router.get('/size-pricing', auth, getSizePricing); 
 router.put('/size-pricing', auth, updateSizePricing); 
@@ -82,12 +86,31 @@ router.get('/article-gender-info', getArticleGenderInfo);
 router.get('/article-gender-size-info', getArticleGenderSizeInfo);
 
 router.get('/allowed-genders', getAllowedGendersForArticle);
+// Suggest article names: /products/articles-suggestions?search=XYZ
+router.get('/articles-suggestions', async (req, res) => {
+  try {
+    const { search = '' } = req.query;
+    if (!search.trim()) return res.json({ data: [] });
+    // Find up to 10 unique article names starting with given letters (case-insensitive)
+    const matches = await Product.find({
+      article: { $regex: `^${search.trim()}`, $options: "i" }
+    }).distinct('article');
+    res.json({ data: matches.slice(0, 10) });
+  } catch (err) {
+    res.status(500).json({ data: [] });
+  }
+});
 router.get('/:id', auth, getProductById);
 router.put('/:id', auth, upload.single('image'), updateProduct); 
 router.post('/', auth, upload.single('image'), createProduct); 
 router.post('/bulk-delete', auth, bulkDelete);
 router.post('/bulk-restore', auth, bulkRestore);
+
+
+
 router.post('/import', auth, importExcel);
 router.post('/permanent-delete', auth, permanentDelete); 
+
+
 
 module.exports = router;

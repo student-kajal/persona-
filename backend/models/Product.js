@@ -47,7 +47,9 @@ const ProductSchema = new mongoose.Schema({
   cartons: { type: Number, default: 0 },            
   pairPerCarton: { type: Number, default: 0 },      
   totalPairs: { type: Number, default: 0 },         
-
+// Add this field to track total cartons already challaned out
+  cartonsChallanedOut: { type: Number, default: 0 },
+  
   createdBy: { type: String },
   noOfCrtn: { type: Number },
   isDeleted: { type: Boolean, default: false },

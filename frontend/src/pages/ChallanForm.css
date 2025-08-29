@@ -11,7 +11,7 @@
 /* Sticky table header */
 .table-responsive {
   max-height: 500px;
-  overflow-y: auto;
+  overflow-y: visible !important;
   overflow-x: auto;
   position: relative;
 }
@@ -35,17 +35,7 @@
   background-color: rgba(13, 110, 253, 0.05);
 }
 
-/* Highlight rows (optional, if you use these classes) */
-/*
-.zero-stock-row, .zero-stock-row td {
-  background-color: #ffd6d6 !important;
-}
-.low-stock-row, .low-stock-row td {
-  background-color: #fff9b0 !important;
-}
-*/
 
-/* Responsive improvements for mobile/tablet */
 @media (max-width: 900px) {
   .table-responsive {
     font-size: 13px;
@@ -61,4 +51,13 @@
     font-size: 12px;
     padding: 6px;
   }
+}
+
+.challan-wrapper .card, 
+.challan-wrapper .card-body,
+.challan-wrapper .row,
+.challan-wrapper .container,
+.challan-wrapper .table-responsive {
+  overflow: visible !important;
+  position: static !important;
 }

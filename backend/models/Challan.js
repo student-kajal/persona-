@@ -59,7 +59,7 @@ const ChallanSchema = new mongoose.Schema({
   invoiceNo: { 
     type: String, 
     required: true,
-    unique: true
+    
   },
   station: {
     type: String, 
