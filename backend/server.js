@@ -38,10 +38,19 @@ connectDB();
 // Middleware
 //app.use(cors());
 app.use(cors({
-  origin: ['https://persona-pfqu.vercel.app', 'http://localhost:3000'],  // Frontend URLs allow karo
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: [
+    'https://persona-pfqu.vercel.app',      // Vercel domain
+    'https://persona-6y7t.vercel.app',     // Netlify domain  
+    'https://your-netlify-domain.netlify.app',  // Agar aur domains hon
+    'http://localhost:3000'                // Local development
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
   credentials: true
 }));
+
+// Preflight requests ke liye
+//app.options('/*', cors());
 
 app.use(express.json());
 
