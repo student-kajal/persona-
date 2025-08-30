@@ -122,11 +122,12 @@ app.use(cors({
     'https://persona-pfqu.vercel.app',           // ← Vercel domain (if needed)
     'http://localhost:3000'                      // ← Local development
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+//  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], 
   allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
   credentials: true
 }));
-
+   
 app.use(express.json());
 
 // ✅ Static files serve करने के लिए
