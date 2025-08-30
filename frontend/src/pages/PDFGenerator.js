@@ -1,7 +1,23 @@
 import React, { useState } from 'react';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
-
+const triggerDownload = (blob, filename) => {
+  if (window.navigator?.msSaveOrOpenBlob) {
+    window.navigator.msSaveOrOpenBlob(blob, filename);
+  } else {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 800);
+  }
+};
 const PDFGenerator = () => {
   const [includeImages, setIncludeImages] = useState(false);
   const [filters, setFilters] = useState({
@@ -17,29 +33,50 @@ const PDFGenerator = () => {
     setFilters(prev => ({ ...prev, [prop]: value }));
   };
 
-  const handleGeneratePDF = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await api.post('/pdf/generate-pdf', {
-        includeImages,
-        filters
-      }, { responseType: 'blob' });
+  // const handleGeneratePDF = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true);
+  //   try {
+  //     const response = await api.post('/pdf/generate-pdf', {
+  //       includeImages,
+  //       filters
+  //     }, { responseType: 'blob' });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'products-report.pdf');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      toast.success('PDF generated successfully!');
-    } catch (err) {
-      toast.error('Failed to generate PDF');
-      console.error(err);
-    }
-    setLoading(false);
-  };
+  //     const url = window.URL.createObjectURL(new Blob([response.data]));
+  //     const link = document.createElement('a');
+  //     link.href = url;
+  //     link.setAttribute('download', 'products-report.pdf');
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     link.remove();
+  //     toast.success('PDF generated successfully!');
+  //   } catch (err) {
+  //     toast.error('Failed to generate PDF');
+  //     console.error(err);
+  //   }
+  //   setLoading(false);
+  // };
+  const handleGeneratePDF = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const response = await api.post('/pdf/generate-pdf', {
+      includeImages,
+      filters
+    }, { responseType: 'blob' });
+
+    triggerDownload(
+      new Blob([response.data], { type: 'application/pdf' }),
+      'products-report.pdf'
+    );
+    toast.success('PDF generated successfully!');
+  } catch (err) {
+    toast.error('Failed to generate PDF');
+    console.error(err);
+  }
+  setLoading(false);
+};
+
 
   return (
     <div className="container mt-4">

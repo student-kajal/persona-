@@ -2,8 +2,25 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import ExcelJS from "exceljs";
-import { saveAs } from "file-saver";
-
+//import { saveAs } from "file-saver";
+const triggerDownload = (blob, filename) => {
+  if (window.navigator?.msSaveOrOpenBlob) {
+    // पुराने Edge IE-mode
+    window.navigator.msSaveOrOpenBlob(blob, filename);
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.style.display = 'none';
+    a.href      = url;
+    a.download  = filename;        // mobile Safari/Chrome यही पढ़ते हैं
+    document.body.appendChild(a);
+    a.click();                     // user-gesture के भीतर
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 800);
+  }
+};
 // Helper functions
 function getVirtualGroup(stockType, gender) {
   const st = (stockType || '').toLowerCase();
@@ -528,7 +545,13 @@ const ProductListTable = ({ products, loading, title, onRefresh }) => {
 
     ws.columns.forEach((col) => { col.width = 14; });
     const buf = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buf]), "Stock-Matrix-Export.xlsx");
+   // saveAs(new Blob([buf]), "Stock-Matrix-Export.xlsx");
+   triggerDownload(
+  new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }),
+  'Stock-Matrix-Export.xlsx'
+);
   };
 
   const handleGeneratePDF = async () => {
@@ -577,13 +600,11 @@ const ProductListTable = ({ products, loading, title, onRefresh }) => {
         filters: {}
       }, { responseType: 'blob' });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'selected-products.pdf');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+     triggerDownload(
+  new Blob([response.data], { type: 'application/pdf' }),
+  'selected-products.pdf'
+);
+
     } catch (err) {
       console.error('PDF Error:', err);
       alert('PDF डाउनलोड नहीं हो पाया');

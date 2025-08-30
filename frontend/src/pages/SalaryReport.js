@@ -1212,6 +1212,49 @@ const SalaryReport = () => {
             text-align: center;
           }
         }
+          * 1) फिल्टर ग्रिड पहले से ही auto-fit था; मोबाइल पर 100% चौड़ाई */
+@media (max-width:768px){
+  .salary-report-container{padding:1rem .5rem;}
+  .filter-grid{grid-template-columns:1fr;gap:1rem;}
+  .action-buttons{justify-content:center;}
+  .challan-header{flex-direction:column;gap:1rem;text-align:center;}
+}
+
+/* 2) मोबाइल-फ्रेंडली टेबल: thead हाइड, हर <td> के आगे label */
+@media (max-width:768px){
+  .main-table thead{display:none;}
+  .main-table, .main-table tbody, .main-table tr,
+  .main-table td{display:block;width:100%;}
+  .main-table tr{margin:0 0 1rem;border:1px solid #e2e8f0;border-radius:8px;padding:.5rem;background:#fff;}
+  .main-table td{
+      padding-left:55%;
+      text-align:left;
+      position:relative;
+      border:none;
+      border-bottom:1px solid #f1f5f9;
+      white-space:normal;
+  }
+  .main-table td::before{
+      content:attr(data-label);
+      position:absolute;
+      left:1rem;
+      top:50%;
+      transform:translateY(-50%);
+      font-weight:600;
+      color:#667eea;
+  }
+  /* worker-header, totals, grand-total अलग रंग बरक़रार रखें */
+  .worker-name,
+  .worker-total,
+  .grand-total-row{display:block;border:none;border-radius:6px;}
+  .worker-name{padding:.8rem;background:#edf2f7;font-size:1rem;}
+  .worker-total, .grand-total-row td{padding:.8rem;text-align:right;}
+}
+
+/* 3) rate-input चौड़ाई मोबाइल पर बड़ी दिखती तो न्यूनतम सेट */
+@media (max-width:768px){
+  .rate-input-mini{width:80px;}
+}
       `}</style>
 
       <div className="main-card">
@@ -1335,12 +1378,12 @@ const SalaryReport = () => {
                       {/* Worker Articles */}
                       {workerData.articles.map((article, idx) => (
                         <tr key={`${workerData.worker}_${idx}`}>
-                          <td>{article.date}</td>
-                          <td style={{ fontWeight: '600' }}>{article.article}</td>
-                          <td>{article.gender || "-"}</td>
-                          <td style={{ fontWeight: '600', color: '#3b82f6' }}>{article.cartons}</td>
-                          <td>{article.pairPerCarton}</td>
-                          <td>
+                          <td data-label="Date">{article.date}</td>
+                          <td data-label="Article" style={{fontWeight:'600'}}>{article.article}</td>
+                          <td data-label="Gender">{article.gender || "-"}</td>
+                          <td data-label="Cartons" style={{ fontWeight: '600', color: '#3b82f6' }}>{article.cartons}</td>
+                          <td data-label="Pair/Crtn">{article.pairPerCarton}</td>
+                          <td  data-label="Rate (₹)">
                             <input
                               type="number"
                               step="0.01"
@@ -1354,7 +1397,7 @@ const SalaryReport = () => {
                               placeholder="0"
                             />
                           </td>
-                          <td className="salary-value">
+                          <td data-label="Earnings (₹)" className="salary-value">
                             ₹{getSalaryForArticle(
                               article.article,
                               article.gender,
