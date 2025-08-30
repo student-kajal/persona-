@@ -189,6 +189,7 @@
 // }
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import api from "../utils/api";
 
 function fmtDate(d) {
   const dt = new Date(d);
@@ -245,8 +246,8 @@ export default function PartySummary() {
       setSearchParams(qs);
 
       // Fetch summary
-      const res = await fetch(`/api/challans/party-summary?${qs.toString()}`);
-      const json = await res.json();
+      const res = await api.get(`/challans/party-summary?${qs.toString()}`);
+const json = res.data; // Note: axios returns data in .data property
       if (!json.success) throw new Error(json.error || 'Failed to load');
       setData(json.data || { perParty: [], perArticle: [], perDay: [] });
     } catch (e) {
