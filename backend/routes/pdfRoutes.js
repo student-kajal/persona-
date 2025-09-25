@@ -7,6 +7,32 @@ const Product = require('../models/Product');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+function getIndianDateTime() {
+  const now = new Date();
+  const indianTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+  return indianTime;
+}
+
+function formatIndianDate(date) {
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric'
+  });
+}
+
+function formatIndianDateTime(date) {
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+}
+
 // --- Group Mapping: Use stockType and gender (lowercase) ---
 function getVirtualGroup(stockType, gender) {
   const st = (stockType || '').toLowerCase();
@@ -118,8 +144,11 @@ router.post('/generate-pdf', async (req, res) => {
     doc.moveDown(1);
 
     // Date Info
-    const now = new Date().toLocaleString();
-    const dateOnly = new Date().toLocaleDateString();
+    // const now = new Date().toLocaleString();
+    // const dateOnly = new Date().toLocaleDateString();
+    const indianNow = getIndianDateTime();
+const now = formatIndianDateTime(indianNow);
+const dateOnly = formatIndianDate(indianNow);
     doc.fontSize(10).font('Helvetica')
       .text(`Date-Time: ${now}`, 40, doc.y)
       .text(`As On Date: ${dateOnly}`, { align: 'right' });

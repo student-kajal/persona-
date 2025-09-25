@@ -761,7 +761,7 @@ const ProductListTable = ({ products, loading, title, onRefresh }) => {
             <div className="d-flex gap-2">
               <select className="form-select" style={{ width: '200px' }} value={pdfExportType} onChange={e => setPdfExportType(e.target.value)}>
                 <option value="withImage">PDF (With Image)</option>
-                <option value="withoutImage">PDF (No Image)</option>
+               
               </select>
               <button className="btn btn-primary" onClick={handleGeneratePDF}>Export PDF</button>
             </div>

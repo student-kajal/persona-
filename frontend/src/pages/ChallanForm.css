@@ -61,3 +61,25 @@
   overflow: visible !important;
   position: static !important;
 }
+/* vertical scroll only here */
+.challan-wrapper .challan-items-scroll {
+  max-height: 60vh;
+  overflow: auto;
+  position: relative;
+}
+
+/* horizontal scroll from Bootstrap, keep visible Y so lists aren't clipped */
+.challan-wrapper .challan-items-scroll .table-responsive {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  position: relative !important;
+}
+
+/* sticky header */
+.challan-wrapper .challan-items-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #212529;
+  color: #fff;
+}

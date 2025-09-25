@@ -4,6 +4,73 @@ const SalaryEntry = require('../models/SalaryEntry');
 const Product = require('../models/Product');
 const History = require('../models/History');
 
+// exports.getSalaryReport = async (req, res) => {
+//   try {
+//     const { from, to, worker } = req.query;
+
+//     const matchQuery = {
+//       createdAt: {
+//         $gte: new Date(from),
+//         $lte: new Date(to + 'T23:59:59.999Z')
+//       }
+//     };
+//     if (worker && worker !== 'all') {
+//       matchQuery.createdBy = worker.toUpperCase();
+//     }
+
+//     // Aggregation to SUM up cartons per user, article, and gender
+//     const salaryData = await SalaryEntry.aggregate([
+//       { $match: matchQuery },
+//       {
+//         $group: {
+//           _id: {
+//             createdBy: "$createdBy",
+//             article: "$article",
+//             gender: "$gender"
+//           },
+//           totalCartons: { $sum: "$cartons" },
+//           totalPairs: { $sum: "$totalPairs" },
+//           lastEntryDate: { $max: "$createdAt" },
+//           pairPerCarton: { $first: "$pairPerCarton" } // Assuming it's the same
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           createdBy: "$_id.createdBy",
+//           article: "$_id.article",
+//           gender: "$_id.gender",
+//           cartons: "$totalCartons",
+//           pairs: "$totalPairs",
+//           pairPerCarton: "$pairPerCarton",
+//           date: "$lastEntryDate"
+//         }
+//       }
+//     ]);
+
+//     const workerContributions = {};
+//     salaryData.forEach(record => {
+//       const w = record.createdBy;
+//       if (!workerContributions[w]) {
+//         workerContributions[w] = { worker: w, articles: [] };
+//       }
+//       workerContributions[w].articles.push({
+//         date: record.date.toISOString().split('T')[0],
+//         article: record.article,
+//         gender: record.gender,
+//         cartons: record.cartons, // This is now the correct SUM
+//         pairPerCarton: record.pairPerCarton,
+//         pairs: record.pairs, // This is also the correct SUM
+//       });
+//     });
+
+//     const report = Object.values(workerContributions);
+//     res.json({ success: true, data: report });
+
+//   } catch (err) {
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };
 exports.getSalaryReport = async (req, res) => {
   try {
     const { from, to, worker } = req.query;
@@ -18,7 +85,7 @@ exports.getSalaryReport = async (req, res) => {
       matchQuery.createdBy = worker.toUpperCase();
     }
 
-    // Aggregation to SUM up cartons per user, article, and gender
+    // ✅ Date-wise separate entries ke liye aggregation modify karo
     const salaryData = await SalaryEntry.aggregate([
       { $match: matchQuery },
       {
@@ -26,12 +93,12 @@ exports.getSalaryReport = async (req, res) => {
           _id: {
             createdBy: "$createdBy",
             article: "$article",
-            gender: "$gender"
+            gender: "$gender",
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
           },
           totalCartons: { $sum: "$cartons" },
           totalPairs: { $sum: "$totalPairs" },
-          lastEntryDate: { $max: "$createdAt" },
-          pairPerCarton: { $first: "$pairPerCarton" } // Assuming it's the same
+          pairPerCarton: { $first: "$pairPerCarton" }
         }
       },
       {
@@ -40,12 +107,13 @@ exports.getSalaryReport = async (req, res) => {
           createdBy: "$_id.createdBy",
           article: "$_id.article",
           gender: "$_id.gender",
+          date: "$_id.date",
           cartons: "$totalCartons",
           pairs: "$totalPairs",
-          pairPerCarton: "$pairPerCarton",
-          date: "$lastEntryDate"
+          pairPerCarton: "$pairPerCarton"
         }
-      }
+      },
+      { $sort: { createdBy: 1, date: 1, article: 1 } }
     ]);
 
     const workerContributions = {};
@@ -55,12 +123,12 @@ exports.getSalaryReport = async (req, res) => {
         workerContributions[w] = { worker: w, articles: [] };
       }
       workerContributions[w].articles.push({
-        date: record.date.toISOString().split('T')[0],
+        date: record.date,
         article: record.article,
         gender: record.gender,
-        cartons: record.cartons, // This is now the correct SUM
+        cartons: record.cartons,
         pairPerCarton: record.pairPerCarton,
-        pairs: record.pairs, // This is also the correct SUM
+        pairs: record.pairs
       });
     });
 
@@ -72,7 +140,7 @@ exports.getSalaryReport = async (req, res) => {
   }
 };
 
-// 
+// Get Salary Report
 exports.updateSalaryEntry = async (req, res) => {
   try {
     const { id } = req.params;
