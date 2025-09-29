@@ -3273,33 +3273,67 @@ const SalaryReport = () => {
   const [search, setSearch] = useState("");
 
   /* ---------------- FETCH ---------------- */
+  // const fetchReport = useCallback(async () => {
+  //   if (!fromDate || !toDate) return;
+  //   try {
+  //     const { data } = await api.get("/salary/salary-report", {
+  //       params: { from: fromDate, to: toDate, worker: worker.value }
+  //     });
+
+  //     const allData = data.data || [];
+
+  //     /* worker-dropdown */
+  //     const uniq = [...new Set(allData.map(i => i.worker))];
+  //     setWorkers([
+  //       { value: "all", label: "All Workers" },
+  //       ...uniq.map(w => ({ value: w, label: w }))
+  //     ]);
+
+  //     setReport(
+  //       worker.value === "all"
+  //         ? allData
+  //         : allData.filter(i => i.worker === worker.value)
+  //     );
+  //   } catch (err) {
+  //     console.error("Fetch error:", err);
+  //     setReport([]);
+  //     setWorkers([]);
+  //   }
+  // }, [fromDate, toDate, worker]);
+
   const fetchReport = useCallback(async () => {
-    if (!fromDate || !toDate) return;
-    try {
-      const { data } = await api.get("/salary/salary-report", {
-        params: { from: fromDate, to: toDate, worker: worker.value }
-      });
+  if (!fromDate || !toDate) return;
+  try {
+    const { data } = await api.get("/salary/salary-report", {
+      params: { from: fromDate, to: toDate, worker: worker.value }
+    });
 
-      const allData = data.data || [];
+    const allData = data.data || [];
 
-      /* worker-dropdown */
-      const uniq = [...new Set(allData.map(i => i.worker))];
-      setWorkers([
-        { value: "all", label: "All Workers" },
-        ...uniq.map(w => ({ value: w, label: w }))
-      ]);
+    // ✅ IMPROVED: Clean worker dropdown with better deduplication
+    const workerNames = allData
+      .map(i => i.worker?.trim().toUpperCase()) // Normalize names
+      .filter(Boolean) // Remove empty values
+      .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+      .sort(); // Sort alphabetically
 
-      setReport(
-        worker.value === "all"
-          ? allData
-          : allData.filter(i => i.worker === worker.value)
-      );
-    } catch (err) {
-      console.error("Fetch error:", err);
-      setReport([]);
-      setWorkers([]);
-    }
-  }, [fromDate, toDate, worker]);
+    setWorkers([
+      { value: "all", label: "All Workers" },
+      ...workerNames.map(w => ({ value: w, label: w }))
+    ]);
+
+    setReport(
+      worker.value === "all"
+        ? allData
+        : allData.filter(i => i.worker === worker.value)
+    );
+  } catch (err) {
+    console.error("Fetch error:", err);
+    setReport([]);
+    setWorkers([]);
+  }
+}, [fromDate, toDate, worker]);
+
 
   useEffect(() => {
     if (fromDate && toDate) {

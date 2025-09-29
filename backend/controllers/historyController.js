@@ -211,31 +211,27 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
 
       const productIds = productsToDelete.map(p => p._id);
       
-      // 2. ✅ IMAGE PRESERVATION - Before deletion
+      // 2. ✅ IMAGE PRESERVATION
       const imagePreservationMap = new Map();
       
       for (let product of productsToDelete) {
         if (product.image) {
           const key = `${product.article}_${product.gender}`;
           if (!imagePreservationMap.has(key)) {
-            imagePreservationMap.set(key, {
-              imageUrl: product.image,
-              fromProduct: `${product.size}x${product.color}`
-            });
+            imagePreservationMap.set(key, product.image);
           }
         }
       }
 
-      // ✅ Transfer images to sibling products
-      for (let [key, imageData] of imagePreservationMap) {
+      // Transfer images to sibling products
+      for (let [key, imageUrl] of imagePreservationMap) {
         const [article, gender] = key.split('_');
         
-        // Find a sibling product without image
         const siblingProduct = await Product.findOneAndUpdate(
           {
             article: new RegExp(`^${article}$`, 'i'),
             gender: gender.toLowerCase(),
-            _id: { $nin: productIds }, // Exclude products being deleted
+            _id: { $nin: productIds },
             isDeleted: false,
             $or: [
               { image: { $exists: false } },
@@ -243,39 +239,26 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
               { image: "" }
             ]
           },
-          { $set: { image: imageData.imageUrl } },
+          { $set: { image: imageUrl } },
           { session, new: true }
         );
 
         if (siblingProduct) {
-          console.log(`✅ Image preserved: ${imageData.fromProduct} → ${siblingProduct.size}x${siblingProduct.color}`);
-        } else {
-          console.log(`⚠️ No sibling found for image from ${article} ${gender}`);
+          console.log(`✅ Image preserved: ${article} ${gender} → ${siblingProduct.size}x${siblingProduct.color}`);
         }
       }
       
-      // 3. ✅ CALCULATE cartons to reduce from each deleted product
-      const cartonsToReduce = {};
+      // 3. ✅ CRITICAL FIX: Only delete SalaryEntries for SPECIFIC products
+      let totalDeletedSalaryEntries = 0;
       
-      for (let product of productsToDelete) {
-        // Get all SalaryEntries for this deleted product
-        const salaryEntries = await SalaryEntry.find({
-          article: product.article.toUpperCase(),
-          gender: product.gender.toLowerCase(),
-          product: product._id
-        }).session(session);
+      for (let productId of productIds) {
+        const deletedSalaryEntries = await SalaryEntry.deleteMany({
+          product: productId // ✅ ONLY this specific product
+        }, { session });
         
-        // Group by user
-        salaryEntries.forEach(entry => {
-          const key = `${entry.article}_${entry.gender}_${entry.createdBy}`;
-          if (!cartonsToReduce[key]) {
-            cartonsToReduce[key] = 0;
-          }
-          cartonsToReduce[key] += entry.cartons;
-        });
+        totalDeletedSalaryEntries += deletedSalaryEntries.deletedCount;
+        console.log(`🗑️ Deleted ${deletedSalaryEntries.deletedCount} salary entries for product ${productId}`);
       }
-
-      console.log('💰 Cartons to reduce:', cartonsToReduce);
 
       // 4. Delete products and history
       const deleteResult = await Product.deleteMany({ _id: { $in: productIds } }, { session });
@@ -283,40 +266,7 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
 
       console.log(`🗑️ Deleted ${deleteResult.deletedCount} products`);
 
-      // 5. ✅ SMART SALARY REDUCTION (not reset!)
-      let salaryUpdates = 0;
-      
-      for (let [key, cartonsToDeduct] of Object.entries(cartonsToReduce)) {
-        const [articleName, genderName, createdBy] = key.split('_');
-        
-        // Find user's current total salary for this article+gender
-        const currentSalary = await SalaryEntry.findOne({
-          article: articleName,
-          gender: genderName,
-          createdBy: createdBy
-        }).session(session).sort({ createdAt: -1 });
-        
-        if (currentSalary && cartonsToDeduct > 0) {
-          const oldCartons = currentSalary.cartons;
-          const newCartons = Math.max(0, oldCartons - cartonsToDeduct);
-          
-          if (newCartons === 0) {
-            // ✅ Remove salary entry if becomes 0
-            await SalaryEntry.deleteOne({ _id: currentSalary._id }, { session });
-            console.log(`🗑️ Removed salary entry: ${createdBy} ${articleName} ${genderName} (${oldCartons} → 0)`);
-            salaryUpdates++;
-          } else {
-            // ✅ Update salary with reduced amount
-            currentSalary.cartons = newCartons;
-            currentSalary.totalPairs = newCartons * currentSalary.pairPerCarton;
-            await currentSalary.save({ session });
-            console.log(`💰 Updated salary: ${createdBy} ${articleName} ${genderName}: ${oldCartons} → ${newCartons}`);
-            salaryUpdates++;
-          }
-        }
-      }
-
-      // 6. ✅ Recalculate Product.cartons for remaining products
+      // 5. ✅ RECALCULATE remaining products' totals
       const remainingProducts = await Product.find({
         article: articleRegex,
         gender: genderRegex || { $exists: true },
@@ -324,29 +274,28 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
       }).session(session);
 
       for (let product of remainingProducts) {
+        // Recalculate this product's total cartons from SalaryEntry
         const totalSalary = await SalaryEntry.aggregate([
           { $match: { product: product._id } },
           { $group: { _id: null, total: { $sum: "$cartons" } } }
         ]).session(session);
         
         const newTotal = totalSalary[0]?.total || 0;
-        if (product.cartons !== newTotal) {
-          product.cartons = newTotal;
-          await product.save({ session });
-          console.log(`📦 Updated product cartons: ${product.article} ${product.size}x${product.color}: ${product.cartons} → ${newTotal}`);
-        }
+        product.cartons = newTotal;
+        await product.save({ session });
+        console.log(`📦 Updated product: ${product.article} ${product.size}x${product.color} = ${newTotal} cartons`);
       }
 
       console.log(`✅ Transaction Summary:`);
       console.log(`   - Products deleted: ${deleteResult.deletedCount}`);
-      console.log(`   - Salary entries updated: ${salaryUpdates}`);
+      console.log(`   - Salary entries deleted: ${totalDeletedSalaryEntries}`);
       console.log(`   - Images preserved: ${imagePreservationMap.size}`);
-      console.log(`   - Remaining variants: ${remainingProducts.length}`);
+      console.log(`   - Remaining products updated: ${remainingProducts.length}`);
     });
 
     res.json({ 
       success: true, 
-      message: `✅ Smart deletion completed: Products deleted, salaries adjusted, images preserved.`
+      message: `✅ Products permanently deleted. Only deleted products affected.`
     });
 
   } catch (err) {

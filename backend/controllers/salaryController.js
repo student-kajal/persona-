@@ -4,6 +4,7 @@ const SalaryEntry = require('../models/SalaryEntry');
 const Product = require('../models/Product');
 const History = require('../models/History');
 
+
 // exports.getSalaryReport = async (req, res) => {
 //   try {
 //     const { from, to, worker } = req.query;
@@ -18,7 +19,7 @@ const History = require('../models/History');
 //       matchQuery.createdBy = worker.toUpperCase();
 //     }
 
-//     // Aggregation to SUM up cartons per user, article, and gender
+//     // ✅ Date-wise separate entries ke liye aggregation modify karo
 //     const salaryData = await SalaryEntry.aggregate([
 //       { $match: matchQuery },
 //       {
@@ -26,12 +27,12 @@ const History = require('../models/History');
 //           _id: {
 //             createdBy: "$createdBy",
 //             article: "$article",
-//             gender: "$gender"
+//             gender: "$gender",
+//             date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
 //           },
 //           totalCartons: { $sum: "$cartons" },
 //           totalPairs: { $sum: "$totalPairs" },
-//           lastEntryDate: { $max: "$createdAt" },
-//           pairPerCarton: { $first: "$pairPerCarton" } // Assuming it's the same
+//           pairPerCarton: { $first: "$pairPerCarton" }
 //         }
 //       },
 //       {
@@ -40,12 +41,13 @@ const History = require('../models/History');
 //           createdBy: "$_id.createdBy",
 //           article: "$_id.article",
 //           gender: "$_id.gender",
+//           date: "$_id.date",
 //           cartons: "$totalCartons",
 //           pairs: "$totalPairs",
-//           pairPerCarton: "$pairPerCarton",
-//           date: "$lastEntryDate"
+//           pairPerCarton: "$pairPerCarton"
 //         }
-//       }
+//       },
+//       { $sort: { createdBy: 1, date: 1, article: 1 } }
 //     ]);
 
 //     const workerContributions = {};
@@ -55,12 +57,12 @@ const History = require('../models/History');
 //         workerContributions[w] = { worker: w, articles: [] };
 //       }
 //       workerContributions[w].articles.push({
-//         date: record.date.toISOString().split('T')[0],
+//         date: record.date,
 //         article: record.article,
 //         gender: record.gender,
-//         cartons: record.cartons, // This is now the correct SUM
+//         cartons: record.cartons,
 //         pairPerCarton: record.pairPerCarton,
-//         pairs: record.pairs, // This is also the correct SUM
+//         pairs: record.pairs
 //       });
 //     });
 
@@ -85,9 +87,24 @@ exports.getSalaryReport = async (req, res) => {
       matchQuery.createdBy = worker.toUpperCase();
     }
 
-    // ✅ Date-wise separate entries ke liye aggregation modify karo
+    // ✅ CRITICAL: Only get entries where product still exists
     const salaryData = await SalaryEntry.aggregate([
       { $match: matchQuery },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $match: {
+          'productInfo.isDeleted': { $ne: true }, // ✅ Only non-deleted products
+          'productInfo': { $ne: [] }, // ✅ Product must exist
+          'cartons': { $gt: 0 } // ✅ Only entries with cartons > 0
+        }
+      },
       {
         $group: {
           _id: {
@@ -102,9 +119,14 @@ exports.getSalaryReport = async (req, res) => {
         }
       },
       {
+        $match: {
+          totalCartons: { $gt: 0 } // ✅ Only show entries with actual cartons
+        }
+      },
+      {
         $project: {
           _id: 0,
-          createdBy: "$_id.createdBy",
+          createdBy: { $trim: { input: "$_id.createdBy" } }, // ✅ Trim whitespace
           article: "$_id.article",
           gender: "$_id.gender",
           date: "$_id.date",
@@ -116,9 +138,12 @@ exports.getSalaryReport = async (req, res) => {
       { $sort: { createdBy: 1, date: 1, article: 1 } }
     ]);
 
+    // ✅ CLEAN worker list - remove duplicates properly
     const workerContributions = {};
     salaryData.forEach(record => {
-      const w = record.createdBy;
+      const w = record.createdBy?.toUpperCase().trim(); // ✅ Normalize worker name
+      if (!w) return; // Skip empty names
+      
       if (!workerContributions[w]) {
         workerContributions[w] = { worker: w, articles: [] };
       }
@@ -136,6 +161,7 @@ exports.getSalaryReport = async (req, res) => {
     res.json({ success: true, data: report });
 
   } catch (err) {
+    console.error('Salary report error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
