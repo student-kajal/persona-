@@ -166,6 +166,108 @@ const History = require('../models/History');
 //     res.status(500).json({ success: false, error: err.message });
 //   }
 // };
+// exports.getSalaryReport = async (req, res) => {
+//   try {
+//     const { from, to, worker } = req.query;
+
+//     const fromDate = new Date(from);
+//     const toDate = new Date(to);
+//     toDate.setHours(23, 59, 59, 999);
+
+//     const matchQuery = {};
+//     if (worker && worker !== 'all') {
+//       matchQuery.createdBy = worker.toUpperCase();
+//     }
+
+//     // ✅ Get ALL SalaryEntries (for product validation)
+//     const allSalaryEntries = await SalaryEntry.find({
+//       ...(Object.keys(matchQuery).length > 0 ? matchQuery : {})
+//     }).populate('product').lean();
+
+//     // ✅ Get History entries in date range
+//     const historyEntries = await History.find({
+//       action: { $in: ['UPDATE', 'ADD'] },
+//       timestamp: { $gte: fromDate, $lte: toDate },
+//       ...(worker && worker !== 'all' ? { updatedByName: worker.toUpperCase() } : {})
+//     }).populate('product').lean();
+
+//     console.log(`🔍 History entries in range: ${historyEntries.length}`);
+
+//     // ✅ Build date-wise salary map
+//     const salaryMap = new Map();
+
+//     for (let historyEntry of historyEntries) {
+//       if (!historyEntry.product || historyEntry.product.isDeleted) continue;
+
+//       const product = historyEntry.product;
+//       const user = historyEntry.updatedByName?.toUpperCase().trim();
+//       const dateStr = historyEntry.timestamp.toISOString().split('T')[0];
+      
+//       const key = `${user}_${product.article}_${product.gender}_${dateStr}`;
+      
+//       if (!salaryMap.has(key)) {
+//         salaryMap.set(key, {
+//           createdBy: user,
+//           article: product.article,
+//           gender: product.gender,
+//           date: dateStr,
+//           cartons: 0,
+//           pairs: 0,
+//           pairPerCarton: product.pairPerCarton
+//         });
+//       }
+      
+//       const entry = salaryMap.get(key);
+//       entry.cartons += historyEntry.quantityChanged;
+//       entry.pairs += historyEntry.quantityChanged * product.pairPerCarton;
+      
+//       console.log(`   ✅ ${dateStr} | ${user} | ${product.article} ${product.gender} | +${historyEntry.quantityChanged} cartons (${historyEntry.action})`);
+//     }
+
+//     // ✅ Convert to array and filter positive cartons
+//     const results = Array.from(salaryMap.values()).filter(entry => entry.cartons > 0);
+
+//     console.log(`📊 Final entries: ${results.length}`);
+
+//     // ✅ Group by worker
+//     const workerContributions = {};
+//     results.forEach(record => {
+//       const w = record.createdBy?.toUpperCase().trim();
+//       if (!w) return;
+      
+//       if (!workerContributions[w]) {
+//         workerContributions[w] = { worker: w, articles: [] };
+//       }
+      
+//       workerContributions[w].articles.push({
+//         date: record.date,
+//         article: record.article,
+//         gender: record.gender,
+//         cartons: record.cartons,
+//         pairPerCarton: record.pairPerCarton,
+//         pairs: record.pairs
+//       });
+//     });
+
+//     const report = Object.values(workerContributions);
+    
+//     // ✅ Sort articles by date
+//     report.forEach(w => {
+//       w.articles.sort((a, b) => new Date(a.date) - new Date(b.date));
+//       const total = w.articles.reduce((sum, a) => sum + a.cartons, 0);
+//       console.log(`   👤 ${w.worker}: ${w.articles.length} entries, ${total} total cartons`);
+//       w.articles.forEach(a => {
+//         console.log(`      📅 ${a.date} | ${a.article} ${a.gender} | ${a.cartons} cartons`);
+//       });
+//     });
+
+//     res.json({ success: true, data: report });
+
+//   } catch (err) {
+//     console.error('❌ Salary report error:', err);
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };
 exports.getSalaryReport = async (req, res) => {
   try {
     const { from, to, worker } = req.query;
@@ -174,62 +276,66 @@ exports.getSalaryReport = async (req, res) => {
     const toDate = new Date(to);
     toDate.setHours(23, 59, 59, 999);
 
-    const matchQuery = {};
-    if (worker && worker !== 'all') {
-      matchQuery.createdBy = worker.toUpperCase();
-    }
-
-    // ✅ Get ALL SalaryEntries (for product validation)
-    const allSalaryEntries = await SalaryEntry.find({
-      ...(Object.keys(matchQuery).length > 0 ? matchQuery : {})
-    }).populate('product').lean();
-
-    // ✅ Get History entries in date range
-    const historyEntries = await History.find({
-      action: { $in: ['UPDATE', 'ADD'] },
-      timestamp: { $gte: fromDate, $lte: toDate },
-      ...(worker && worker !== 'all' ? { updatedByName: worker.toUpperCase() } : {})
-    }).populate('product').lean();
-
-    console.log(`🔍 History entries in range: ${historyEntries.length}`);
-
-    // ✅ Build date-wise salary map
-    const salaryMap = new Map();
-
-    for (let historyEntry of historyEntries) {
-      if (!historyEntry.product || historyEntry.product.isDeleted) continue;
-
-      const product = historyEntry.product;
-      const user = historyEntry.updatedByName?.toUpperCase().trim();
-      const dateStr = historyEntry.timestamp.toISOString().split('T')[0];
-      
-      const key = `${user}_${product.article}_${product.gender}_${dateStr}`;
-      
-      if (!salaryMap.has(key)) {
-        salaryMap.set(key, {
-          createdBy: user,
-          article: product.article,
-          gender: product.gender,
-          date: dateStr,
-          cartons: 0,
-          pairs: 0,
-          pairPerCarton: product.pairPerCarton
-        });
+    // ✅ OPTIMIZATION: Single aggregation with proper indexing
+    const pipeline = [
+      {
+        $match: {
+          action: { $in: ['UPDATE', 'ADD'] },
+          timestamp: { $gte: fromDate, $lte: toDate },
+          ...(worker && worker !== 'all' ? { updatedByName: worker.toUpperCase() } : {})
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $match: {
+          'productInfo.isDeleted': { $ne: true },
+          'productInfo': { $ne: [] }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            user: { $toUpper: { $trim: { input: '$updatedByName' } } },
+            article: { $arrayElemAt: ['$productInfo.article', 0] },
+            gender: { $arrayElemAt: ['$productInfo.gender', 0] },
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } }
+          },
+          cartons: { $sum: '$quantityChanged' },
+          pairPerCarton: { $first: { $arrayElemAt: ['$productInfo.pairPerCarton', 0] } }
+        }
+      },
+      {
+        $match: {
+          cartons: { $gt: 0 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          createdBy: '$_id.user',
+          article: '$_id.article',
+          gender: '$_id.gender',
+          date: '$_id.date',
+          cartons: 1,
+          pairPerCarton: 1,
+          pairs: { $multiply: ['$cartons', '$pairPerCarton'] }
+        }
+      },
+      {
+        $sort: { createdBy: 1, date: 1, article: 1 }
       }
-      
-      const entry = salaryMap.get(key);
-      entry.cartons += historyEntry.quantityChanged;
-      entry.pairs += historyEntry.quantityChanged * product.pairPerCarton;
-      
-      console.log(`   ✅ ${dateStr} | ${user} | ${product.article} ${product.gender} | +${historyEntry.quantityChanged} cartons (${historyEntry.action})`);
-    }
+    ];
 
-    // ✅ Convert to array and filter positive cartons
-    const results = Array.from(salaryMap.values()).filter(entry => entry.cartons > 0);
+    const results = await History.aggregate(pipeline);
 
-    console.log(`📊 Final entries: ${results.length}`);
-
-    // ✅ Group by worker
+    // ✅ Group by worker (fast in-memory operation)
     const workerContributions = {};
     results.forEach(record => {
       const w = record.createdBy?.toUpperCase().trim();
@@ -250,17 +356,6 @@ exports.getSalaryReport = async (req, res) => {
     });
 
     const report = Object.values(workerContributions);
-    
-    // ✅ Sort articles by date
-    report.forEach(w => {
-      w.articles.sort((a, b) => new Date(a.date) - new Date(b.date));
-      const total = w.articles.reduce((sum, a) => sum + a.cartons, 0);
-      console.log(`   👤 ${w.worker}: ${w.articles.length} entries, ${total} total cartons`);
-      w.articles.forEach(a => {
-        console.log(`      📅 ${a.date} | ${a.article} ${a.gender} | ${a.cartons} cartons`);
-      });
-    });
-
     res.json({ success: true, data: report });
 
   } catch (err) {
@@ -268,6 +363,7 @@ exports.getSalaryReport = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
 
 // Get Salary Report
 exports.updateSalaryEntry = async (req, res) => {

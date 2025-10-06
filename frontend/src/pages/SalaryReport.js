@@ -3301,7 +3301,40 @@ const SalaryReport = () => {
   //   }
   // }, [fromDate, toDate, worker]);
 
-  const fetchReport = useCallback(async () => {
+//   const fetchReport = useCallback(async () => {
+//   if (!fromDate || !toDate) return;
+//   try {
+//     const { data } = await api.get("/salary/salary-report", {
+//       params: { from: fromDate, to: toDate, worker: worker.value }
+//     });
+
+//     const allData = data.data || [];
+
+//     // ✅ IMPROVED: Clean worker dropdown with better deduplication
+//     const workerNames = allData
+//       .map(i => i.worker?.trim().toUpperCase()) // Normalize names
+//       .filter(Boolean) // Remove empty values
+//       .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+//       .sort(); // Sort alphabetically
+
+//     setWorkers([
+//       { value: "all", label: "All Workers" },
+//       ...workerNames.map(w => ({ value: w, label: w }))
+//     ]);
+
+//     setReport(
+//       worker.value === "all"
+//         ? allData
+//         : allData.filter(i => i.worker === worker.value)
+//     );
+//   } catch (err) {
+//     console.error("Fetch error:", err);
+//     setReport([]);
+//     setWorkers([]);
+//   }
+// }, [fromDate, toDate, worker]);
+
+const fetchReport = useCallback(async () => {
   if (!fromDate || !toDate) return;
   try {
     const { data } = await api.get("/salary/salary-report", {
@@ -3310,22 +3343,26 @@ const SalaryReport = () => {
 
     const allData = data.data || [];
 
-    // ✅ IMPROVED: Clean worker dropdown with better deduplication
-    const workerNames = allData
-      .map(i => i.worker?.trim().toUpperCase()) // Normalize names
-      .filter(Boolean) // Remove empty values
-      .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
-      .sort(); // Sort alphabetically
+    // ✅ FIX: Get workers from backend data (case-insensitive)
+    const workerSet = new Set();
+    allData.forEach(item => {
+      const normalizedWorker = item.worker?.trim().toUpperCase();
+      if (normalizedWorker) {
+        workerSet.add(normalizedWorker);
+      }
+    });
+
+    const sortedWorkers = Array.from(workerSet).sort();
 
     setWorkers([
       { value: "all", label: "All Workers" },
-      ...workerNames.map(w => ({ value: w, label: w }))
+      ...sortedWorkers.map(w => ({ value: w, label: w }))
     ]);
 
     setReport(
       worker.value === "all"
         ? allData
-        : allData.filter(i => i.worker === worker.value)
+        : allData.filter(i => i.worker?.toUpperCase() === worker.value?.toUpperCase())
     );
   } catch (err) {
     console.error("Fetch error:", err);
@@ -3333,7 +3370,6 @@ const SalaryReport = () => {
     setWorkers([]);
   }
 }, [fromDate, toDate, worker]);
-
 
   useEffect(() => {
     if (fromDate && toDate) {
