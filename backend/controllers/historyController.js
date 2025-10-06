@@ -142,47 +142,6 @@ exports.deleteHistoryEntry = async (req, res) => {
   }
 };
 
-// exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
-//   try {
-//     const { article, gender, size, color } = req.body;
-    
-//     if (!article) return res.status(400).json({ success: false, error: 'article required' });
-
-//     // 1. Product query (include size/color for product delete)
-//     const productQuery = { article: new RegExp(`^${article}$`, 'i') };
-//     if (gender) productQuery.gender = new RegExp(`^${gender}$`, 'i');
-//     if (size)   productQuery.size   = size;
-//     if (color)  productQuery.color  = new RegExp(`^${color}$`, 'i');
-
-//     const products   = await Product.find(productQuery);
-//     const productIds = products.map(p => p._id);
-
-//     await Product.deleteMany({ _id: { $in: productIds } });
-//     await History.deleteMany({ product: { $in: productIds } });
-
-//     // 2. Salary reset query (NO size/color, only article+gender as per schema)
-//     const salaryQuery = { article: new RegExp(`^${article}$`, 'i') };
-//     if (gender) salaryQuery.gender = new RegExp(`^${gender}$`, 'i');
-
-//     // Debug print
-//     const matches = await SalaryEntry.find(salaryQuery);
-//     console.log('Salaries matched:', matches.length, salaryQuery);
-
-//     const result = await SalaryEntry.updateMany(
-//       salaryQuery,
-//       { $set: { cartons: 0, totalPairs: 0 } }
-//     );
-//     console.log('Salary reset result:', result);
-
-//     res.json({ 
-//       success: true, 
-//       message: `✅ Deleted ${productIds.length} product(s); zeroed ${result.modifiedCount} salary entrie(s).`
-//     });
-//   } catch (err) {
-//     console.error('Permanent delete error:', err);
-//     res.status(500).json({ success: false, error: err.message });
-//   }
-// };
 
 
 exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
@@ -308,3 +267,44 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
     await session.endSession();
   }
 };
+// exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
+//   try {
+//     const { article, gender, size, color } = req.body;
+    
+//     if (!article) return res.status(400).json({ success: false, error: 'article required' });
+
+//     // 1. Product query (include size/color for product delete)
+//     const productQuery = { article: new RegExp(`^${article}$`, 'i') };
+//     if (gender) productQuery.gender = new RegExp(`^${gender}$`, 'i');
+//     if (size)   productQuery.size   = size;
+//     if (color)  productQuery.color  = new RegExp(`^${color}$`, 'i');
+
+//     const products   = await Product.find(productQuery);
+//     const productIds = products.map(p => p._id);
+
+//     await Product.deleteMany({ _id: { $in: productIds } });
+//     await History.deleteMany({ product: { $in: productIds } });
+
+//     // 2. Salary reset query (NO size/color, only article+gender as per schema)
+//     const salaryQuery = { article: new RegExp(`^${article}$`, 'i') };
+//     if (gender) salaryQuery.gender = new RegExp(`^${gender}$`, 'i');
+
+//     // Debug print
+//     const matches = await SalaryEntry.find(salaryQuery);
+//     console.log('Salaries matched:', matches.length, salaryQuery);
+
+//     const result = await SalaryEntry.updateMany(
+//       salaryQuery,
+//       { $set: { cartons: 0, totalPairs: 0 } }
+//     );
+//     console.log('Salary reset result:', result);
+
+//     res.json({ 
+//       success: true, 
+//       message: `✅ Deleted ${productIds.length} product(s); zeroed ${result.modifiedCount} salary entrie(s).`
+//     });
+//   } catch (err) {
+//     console.error('Permanent delete error:', err);
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };

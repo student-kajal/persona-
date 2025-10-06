@@ -1,9 +1,4 @@
 
-const mongoose = require('mongoose');
-const SalaryEntry = require('../models/SalaryEntry');
-const Product = require('../models/Product');
-const History = require('../models/History');
-
 
 // exports.getSalaryReport = async (req, res) => {
 //   try {
@@ -73,80 +68,177 @@ const History = require('../models/History');
 //     res.status(500).json({ success: false, error: err.message });
 //   }
 // };
+const mongoose = require('mongoose');
+const SalaryEntry = require('../models/SalaryEntry');
+const Product = require('../models/Product');
+const History = require('../models/History');
+
+
+// exports.getSalaryReport = async (req, res) => {
+//   try {
+//     const { from, to, worker } = req.query;
+
+//     const matchQuery = {
+//       createdAt: {
+//         $gte: new Date(from),
+//         $lte: new Date(to + 'T23:59:59.999Z')
+//       }
+//     };
+//     if (worker && worker !== 'all') {
+//       matchQuery.createdBy = worker.toUpperCase();
+//     }
+
+//     // ✅ CRITICAL: Only get entries where product still exists
+//     const salaryData = await SalaryEntry.aggregate([
+//       { $match: matchQuery },
+//       {
+//         $lookup: {
+//           from: 'products',
+//           localField: 'product',
+//           foreignField: '_id',
+//           as: 'productInfo'
+//         }
+//       },
+//       {
+//         $match: {
+//           'productInfo.isDeleted': { $ne: true }, // ✅ Only non-deleted products
+//           'productInfo': { $ne: [] }, // ✅ Product must exist
+//           'cartons': { $gt: 0 } // ✅ Only entries with cartons > 0
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             createdBy: "$createdBy",
+//             article: "$article",
+//             gender: "$gender",
+//             date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+//           },
+//           totalCartons: { $sum: "$cartons" },
+//           totalPairs: { $sum: "$totalPairs" },
+//           pairPerCarton: { $first: "$pairPerCarton" }
+//         }
+//       },
+//       {
+//         $match: {
+//           totalCartons: { $gt: 0 } // ✅ Only show entries with actual cartons
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           createdBy: { $trim: { input: "$_id.createdBy" } }, // ✅ Trim whitespace
+//           article: "$_id.article",
+//           gender: "$_id.gender",
+//           date: "$_id.date",
+//           cartons: "$totalCartons",
+//           pairs: "$totalPairs",
+//           pairPerCarton: "$pairPerCarton"
+//         }
+//       },
+//       { $sort: { createdBy: 1, date: 1, article: 1 } }
+//     ]);
+
+//     // ✅ CLEAN worker list - remove duplicates properly
+//     const workerContributions = {};
+//     salaryData.forEach(record => {
+//       const w = record.createdBy?.toUpperCase().trim(); // ✅ Normalize worker name
+//       if (!w) return; // Skip empty names
+      
+//       if (!workerContributions[w]) {
+//         workerContributions[w] = { worker: w, articles: [] };
+//       }
+//       workerContributions[w].articles.push({
+//         date: record.date,
+//         article: record.article,
+//         gender: record.gender,
+//         cartons: record.cartons,
+//         pairPerCarton: record.pairPerCarton,
+//         pairs: record.pairs
+//       });
+//     });
+
+//     const report = Object.values(workerContributions);
+//     res.json({ success: true, data: report });
+
+//   } catch (err) {
+//     console.error('Salary report error:', err);
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };
 exports.getSalaryReport = async (req, res) => {
   try {
     const { from, to, worker } = req.query;
 
-    const matchQuery = {
-      createdAt: {
-        $gte: new Date(from),
-        $lte: new Date(to + 'T23:59:59.999Z')
-      }
-    };
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+
+    const matchQuery = {};
     if (worker && worker !== 'all') {
       matchQuery.createdBy = worker.toUpperCase();
     }
 
-    // ✅ CRITICAL: Only get entries where product still exists
-    const salaryData = await SalaryEntry.aggregate([
-      { $match: matchQuery },
-      {
-        $lookup: {
-          from: 'products',
-          localField: 'product',
-          foreignField: '_id',
-          as: 'productInfo'
-        }
-      },
-      {
-        $match: {
-          'productInfo.isDeleted': { $ne: true }, // ✅ Only non-deleted products
-          'productInfo': { $ne: [] }, // ✅ Product must exist
-          'cartons': { $gt: 0 } // ✅ Only entries with cartons > 0
-        }
-      },
-      {
-        $group: {
-          _id: {
-            createdBy: "$createdBy",
-            article: "$article",
-            gender: "$gender",
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
-          },
-          totalCartons: { $sum: "$cartons" },
-          totalPairs: { $sum: "$totalPairs" },
-          pairPerCarton: { $first: "$pairPerCarton" }
-        }
-      },
-      {
-        $match: {
-          totalCartons: { $gt: 0 } // ✅ Only show entries with actual cartons
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          createdBy: { $trim: { input: "$_id.createdBy" } }, // ✅ Trim whitespace
-          article: "$_id.article",
-          gender: "$_id.gender",
-          date: "$_id.date",
-          cartons: "$totalCartons",
-          pairs: "$totalPairs",
-          pairPerCarton: "$pairPerCarton"
-        }
-      },
-      { $sort: { createdBy: 1, date: 1, article: 1 } }
-    ]);
+    // ✅ Get ALL SalaryEntries (for product validation)
+    const allSalaryEntries = await SalaryEntry.find({
+      ...(Object.keys(matchQuery).length > 0 ? matchQuery : {})
+    }).populate('product').lean();
 
-    // ✅ CLEAN worker list - remove duplicates properly
+    // ✅ Get History entries in date range
+    const historyEntries = await History.find({
+      action: { $in: ['UPDATE', 'ADD'] },
+      timestamp: { $gte: fromDate, $lte: toDate },
+      ...(worker && worker !== 'all' ? { updatedByName: worker.toUpperCase() } : {})
+    }).populate('product').lean();
+
+    console.log(`🔍 History entries in range: ${historyEntries.length}`);
+
+    // ✅ Build date-wise salary map
+    const salaryMap = new Map();
+
+    for (let historyEntry of historyEntries) {
+      if (!historyEntry.product || historyEntry.product.isDeleted) continue;
+
+      const product = historyEntry.product;
+      const user = historyEntry.updatedByName?.toUpperCase().trim();
+      const dateStr = historyEntry.timestamp.toISOString().split('T')[0];
+      
+      const key = `${user}_${product.article}_${product.gender}_${dateStr}`;
+      
+      if (!salaryMap.has(key)) {
+        salaryMap.set(key, {
+          createdBy: user,
+          article: product.article,
+          gender: product.gender,
+          date: dateStr,
+          cartons: 0,
+          pairs: 0,
+          pairPerCarton: product.pairPerCarton
+        });
+      }
+      
+      const entry = salaryMap.get(key);
+      entry.cartons += historyEntry.quantityChanged;
+      entry.pairs += historyEntry.quantityChanged * product.pairPerCarton;
+      
+      console.log(`   ✅ ${dateStr} | ${user} | ${product.article} ${product.gender} | +${historyEntry.quantityChanged} cartons (${historyEntry.action})`);
+    }
+
+    // ✅ Convert to array and filter positive cartons
+    const results = Array.from(salaryMap.values()).filter(entry => entry.cartons > 0);
+
+    console.log(`📊 Final entries: ${results.length}`);
+
+    // ✅ Group by worker
     const workerContributions = {};
-    salaryData.forEach(record => {
-      const w = record.createdBy?.toUpperCase().trim(); // ✅ Normalize worker name
-      if (!w) return; // Skip empty names
+    results.forEach(record => {
+      const w = record.createdBy?.toUpperCase().trim();
+      if (!w) return;
       
       if (!workerContributions[w]) {
         workerContributions[w] = { worker: w, articles: [] };
       }
+      
       workerContributions[w].articles.push({
         date: record.date,
         article: record.article,
@@ -158,10 +250,21 @@ exports.getSalaryReport = async (req, res) => {
     });
 
     const report = Object.values(workerContributions);
+    
+    // ✅ Sort articles by date
+    report.forEach(w => {
+      w.articles.sort((a, b) => new Date(a.date) - new Date(b.date));
+      const total = w.articles.reduce((sum, a) => sum + a.cartons, 0);
+      console.log(`   👤 ${w.worker}: ${w.articles.length} entries, ${total} total cartons`);
+      w.articles.forEach(a => {
+        console.log(`      📅 ${a.date} | ${a.article} ${a.gender} | ${a.cartons} cartons`);
+      });
+    });
+
     res.json({ success: true, data: report });
 
   } catch (err) {
-    console.error('Salary report error:', err);
+    console.error('❌ Salary report error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -200,6 +303,30 @@ exports.updateSalaryEntry = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+// Yahan add kar - existing exports ke saath
+exports.debugSalaryEntries = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    
+    const entries = await SalaryEntry.find({
+      createdAt: {
+        $gte: new Date(from),
+        $lte: new Date(to + 'T23:59:59.999Z')
+      }
+    }).populate('product');
+    
+    console.log('🔍 Raw Salary Entries:', entries.length);
+    entries.forEach(e => {
+      console.log(`   📝 ${e.createdBy} | ${e.article} | ${e.cartons} cartons | Product: ${e.product ? '✅' : '❌'}`);
+    });
+    
+    res.json({ success: true, entries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 
 exports.softDeleteSalaryEntry = async (req, res) => {
   try {

@@ -12,12 +12,15 @@ const router = express.Router();
 const { 
   getSalaryReport,
   patchSalaryEntry,
-  getSalaryEntryById 
+  getSalaryEntryById ,
+  debugSalaryEntries 
 } = require('../controllers/salaryController');
 
 // GET /api/salary/report (Isko bhi thoda aasan kar diya)
 router.get('/salary-report', getSalaryReport);
 
+// Add this route
+router.get('/debug-entries', debugSalaryEntries);
 
 // PATCH /api/salary/:id
 router.patch('/:id', patchSalaryEntry);

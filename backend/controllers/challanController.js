@@ -3,6 +3,7 @@
 const Challan = require('../models/Challan');
 const Product = require('../models/Product');
 const History = require('../models/History');
+const SalaryEntry = require('../models/SalaryEntry'); // ✅ ADD THIS IMPORT
 const mongoose = require('mongoose');
 
 // Get article variants (case-insensitive + backward compatible)
@@ -40,12 +41,108 @@ exports.getArticleVariants = async (req, res) => {
 
 
 
+// exports.createChallan = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { items } = req.body; // createdByName is not needed if using req.user
+
+//     if (!items || !Array.isArray(items) || items.length === 0) {
+//       throw new Error('No items provided');
+//     }
+
+//     // 1. Generate Unique Invoice Number
+//     const year = new Date().getFullYear();
+//     let latestChallan = await Challan.findOne().sort({ createdAt: -1 });
+//     let nextNumber = 1;
+//     if (latestChallan && latestChallan.invoiceNo) {
+//       const parts = latestChallan.invoiceNo.split('/');
+//       if (parts[1] == year.toString()) {
+//         // Fix: Use parseInt on the number part only
+//         nextNumber = (parseInt(parts[0], 10) || 0) + 1;
+//       }
+//     }
+
+//     let invoiceNo;
+//     let attempts = 0;
+//     while (attempts < 10) {
+//       invoiceNo = `${nextNumber}/${year}`;
+//       const existing = await Challan.findOne({ invoiceNo });
+//       if (!existing) break;
+//       nextNumber++;
+//       attempts++;
+//     }
+//     if (attempts === 10) {
+//       throw new Error('Failed to generate unique invoice number.');
+//     }
+
+//     // 2. Loop through items, update stock, and create history
+//     for (const item of items) {
+//       const product = await Product.findOne({
+//         $expr: { $eq: [{ $toUpper: '$article' }, item.article.toUpperCase()] },
+//         size: item.size,
+//         color: new RegExp(`^${item.color}$`, 'i'),
+//         isDeleted: false
+//       }).session(session);
+
+//       if (!product) {
+//         throw new Error(`Product not found: ${item.article}-${item.size}-${item.color}`);
+//       }
+//       if (product.cartons < item.cartons) {
+//         throw new Error(`Stock insufficient for ${item.article}. Available: ${product.cartons}, Requested: ${item.cartons}`);
+//       }
+
+//       product.cartons -= item.cartons;
+//       product.cartonsChallanedOut = (product.cartonsChallanedOut || 0) + item.cartons;
+//       await product.save({ session });
+
+//       // **FIXED: This block is now INSIDE the loop**
+//       await History.create([{
+//         product: product._id,
+//         action: 'CHALLAN_OUT',
+//         quantityChanged: -item.cartons,
+//         updatedBy: req.user?._id,
+//         updatedByName: (req.user?.username || 'SYSTEM').toUpperCase(),
+//         partyName: (req.body.partyName || '').toUpperCase(),
+//         invoiceNo: invoiceNo,
+//         note: `Challan OUT to ${(req.body.partyName||'').toUpperCase()} (inv ${invoiceNo})`,
+//         timestamp: new Date(),
+//       }], { session });
+//     } // <-- End of for loop
+
+//     // 3. Prepare & Save Challan
+//     const challanData = {
+//       ...req.body,
+//       invoiceNo,
+//       items: items.map(i => ({
+//         ...i,
+//         article: i.article.toUpperCase(),
+//         color: i.color.toUpperCase()
+//       })),
+//     };
+
+//     const challan = new Challan(challanData);
+//     const savedChallan = await challan.save({ session });
+
+//     await session.commitTransaction();
+//     session.endSession();
+//     res.status(201).json({ success: true, data: savedChallan });
+
+//   } catch (error) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     // Log the actual error on the server
+//     console.error("Challan creation failed:", error);
+//     res.status(400).json({ success: false, error: error.message });
+//   }
+// };
 exports.createChallan = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { items } = req.body; // createdByName is not needed if using req.user
+    const { items } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       throw new Error('No items provided');
@@ -58,7 +155,6 @@ exports.createChallan = async (req, res) => {
     if (latestChallan && latestChallan.invoiceNo) {
       const parts = latestChallan.invoiceNo.split('/');
       if (parts[1] == year.toString()) {
-        // Fix: Use parseInt on the number part only
         nextNumber = (parseInt(parts[0], 10) || 0) + 1;
       }
     }
@@ -76,7 +172,7 @@ exports.createChallan = async (req, res) => {
       throw new Error('Failed to generate unique invoice number.');
     }
 
-    // 2. Loop through items, update stock, and create history
+    // 2. Process each item
     for (const item of items) {
       const product = await Product.findOne({
         $expr: { $eq: [{ $toUpper: '$article' }, item.article.toUpperCase()] },
@@ -88,15 +184,38 @@ exports.createChallan = async (req, res) => {
       if (!product) {
         throw new Error(`Product not found: ${item.article}-${item.size}-${item.color}`);
       }
-      if (product.cartons < item.cartons) {
-        throw new Error(`Stock insufficient for ${item.article}. Available: ${product.cartons}, Requested: ${item.cartons}`);
+
+      // ✅ Calculate ACTUAL available stock (SalaryEntry - existing challan)
+      const totalSalaryAgg = await SalaryEntry.aggregate([
+        { $match: { product: product._id } },
+        { $group: { _id: null, total: { $sum: "$cartons" } } }
+      ]).session(session);
+      const totalSalary = totalSalaryAgg[0]?.total || 0;
+
+      const challanAgg = await History.aggregate([
+        {
+          $match: {
+            product: product._id,
+            action: 'CHALLAN_OUT'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOut: { $sum: { $abs: '$quantityChanged' } }
+          }
+        }
+      ]).session(session);
+      const existingChallanOut = challanAgg[0]?.totalOut || 0;
+
+      const availableCartons = Math.max(0, totalSalary - existingChallanOut);
+
+      // ✅ Stock validation
+      if (availableCartons < item.cartons) {
+        throw new Error(`Stock insufficient for ${item.article}. Available: ${availableCartons}, Requested: ${item.cartons}`);
       }
 
-      product.cartons -= item.cartons;
-      product.cartonsChallanedOut = (product.cartonsChallanedOut || 0) + item.cartons;
-      await product.save({ session });
-
-      // **FIXED: This block is now INSIDE the loop**
+      // ✅ Create History entry ONLY (don't touch Product.cartons manually)
       await History.create([{
         product: product._id,
         action: 'CHALLAN_OUT',
@@ -108,9 +227,33 @@ exports.createChallan = async (req, res) => {
         note: `Challan OUT to ${(req.body.partyName||'').toUpperCase()} (inv ${invoiceNo})`,
         timestamp: new Date(),
       }], { session });
-    } // <-- End of for loop
 
-    // 3. Prepare & Save Challan
+      // ✅ RECALCULATE Product.cartons from SalaryEntry - Total Challan
+      const newChallanAgg = await History.aggregate([
+        {
+          $match: {
+            product: product._id,
+            action: 'CHALLAN_OUT'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOut: { $sum: { $abs: '$quantityChanged' } }
+          }
+        }
+      ]).session(session);
+      const newTotalChallanOut = newChallanAgg[0]?.totalOut || 0;
+
+      // ✅ CRITICAL: Recalculate from scratch
+      product.cartons = Math.max(0, totalSalary - newTotalChallanOut);
+      product.cartonsChallanedOut = newTotalChallanOut;
+      await product.save({ session });
+
+      console.log(`✅ Challan OUT: ${item.article} | Salary: ${totalSalary} | Challan: ${newTotalChallanOut} | Product: ${product.cartons}`);
+    }
+
+    // 3. Save Challan
     const challanData = {
       ...req.body,
       invoiceNo,
@@ -131,12 +274,10 @@ exports.createChallan = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
-    // Log the actual error on the server
     console.error("Challan creation failed:", error);
     res.status(400).json({ success: false, error: error.message });
   }
 };
-
 
 // Delete challan with stock revert and history tracking
 exports.deleteChallan = async (req, res) => {
