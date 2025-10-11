@@ -1,4 +1,100 @@
+// exports.getSalaryReport = async (req, res) => {
+//   try {
+//     const { from, to, worker } = req.query;
 
+//     const query = {
+//       createdAt: {
+//         $gte: new Date(from),
+//         $lte: new Date(to + 'T23:59:59.999Z')
+//       }
+//     };
+
+//     if (worker && worker !== 'all') {
+//       query.createdBy = worker.toUpperCase();
+//     }
+
+//     // ✅ Ab SalaryEntry ke sath product bhi le aayenge
+//     let records = await SalaryEntry.find(query)
+//       .populate({
+//         path: 'product',
+//         match: { isDeleted: false }, // Sirf wo product jinka isDeleted=false ho
+//         select: '_id'
+//       })
+//       .select('createdBy article gender cartons pairPerCarton totalPairs createdAt product');
+
+//     // ✅ Filter karo jisme product null ho (iska matlab product delete ho gaya hai)
+//     records = records.filter(r => r.product);
+
+//     const workerContributions = {};
+
+//     records.forEach(record => {
+//       const w = record.createdBy;
+//       const art = record.article;
+//       const dateStr = record.createdAt.toISOString().split('T')[0];
+
+//       if (!workerContributions[w]) {
+//         workerContributions[w] = { worker: w, articles: [] };
+//       }
+
+//       workerContributions[w].articles.push({
+//         article: art,
+//         gender: record.gender,
+//         cartons: record.cartons,
+//         pairs: record.totalPairs,
+//         date: dateStr
+//       });
+//     });
+
+//     const report = Object.values(workerContributions);
+
+//     res.json({ success: true, data: report });
+//   } catch (err) {
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };
+
+// 6. Get Products (with filters)
+// exports.getProducts = async (req, res) => {
+//   try {
+//     const {
+//       search,
+//       stockType,
+//       gender,
+//       color,
+//       size,
+//       minCartons,
+//       maxCartons,
+//       sortBy = 'article',
+//       sortOrder = 'asc'
+//     } = req.query;
+
+//     const filter = { isDeleted: false };
+//     const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+
+//     if (search) filter.article = { $regex: search, $options: 'i' };
+//     if (stockType) filter.stockType = stockType;
+//     if (gender) filter.gender = gender;
+//     if (color) filter.color = { $regex: `^${color}$`, $options: 'i' };
+
+//     if (size) filter.size = size;
+//     if (minCartons) filter.cartons = { $gte: Number(minCartons) };
+//     if (maxCartons) filter.cartons = { ...filter.cartons, $lte: Number(maxCartons) };
+
+//     const products = await Product.find(filter)
+//       .sort(sortOptions);
+
+//     res.json({
+//       success: true,
+//       count: products.length,
+//       data: products
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       error: err.message
+//     });
+//   }
+// };
 
 
 
@@ -308,139 +404,6 @@ exports.getProductById = async (req, res) => {
   }
 };
 
-// exports.updateProduct = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const targetUser = (req.body.createdBy || '').toUpperCase();
-//     const increment = Number(req.body.cartons) || 0;
-
-//     console.log(`🚀 UPDATE REQUEST: User=${targetUser}, Increment=${increment}, ProductId=${id}`);
-
-//     const product = await Product.findById(id);
-//     if (!product) return res.status(404).json({ success: false, error: 'Product not found' });
-
-//     // ✅ Get current user's ACTUAL available cartons (same logic as getProductById)
-//     const userAgg = await SalaryEntry.aggregate([
-//       { $match: {
-//           createdBy: targetUser,
-//           article: product.article.toUpperCase(),
-//           gender: product.gender.toLowerCase(),
-//           product: product._id
-//       }},
-//       { $group: { _id: null, total: { $sum: "$cartons" } } }
-//     ]);
-//     const userSalaryCartons = userAgg[0]?.total || 0;
-
-//     // Get challan reduction for this user
-//     const totalSalaryCartons = await SalaryEntry.aggregate([
-//       { $match: { product: product._id } },
-//       { $group: { _id: null, total: { $sum: "$cartons" } } }
-//     ]);
-
-//     const totalChallanOuts = await History.aggregate([
-//       {
-//         $match: {
-//           product: product._id,
-//           action: 'CHALLAN_OUT'
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: null,
-//           totalOut: { $sum: { $abs: '$quantityChanged' } }
-//         }
-//       }
-//     ]);
-
-//     const totalSalary = totalSalaryCartons[0]?.total || 0;
-//     const totalChallanOut = totalChallanOuts[0]?.totalOut || 0;
-
-//     // User's proportional challan reduction
-//     let userChallanReduction = 0;
-//     if (totalSalary > 0 && totalChallanOut > 0) {
-//       const userRatio = userSalaryCartons / totalSalary;
-//       userChallanReduction = Math.floor(totalChallanOut * userRatio);
-//     }
-
-//     const actualAvailableCartons = Math.max(0, userSalaryCartons - userChallanReduction);
-
-//     console.log(`📊 CALCULATIONS:`, {
-//       userSalaryCartons,
-//       totalSalary,
-//       totalChallanOut,
-//       userChallanReduction,
-//       actualAvailableCartons,
-//       willBecomeAfterIncrement: actualAvailableCartons + increment
-//     });
-
-//     // ✅ Critical: Update SalaryEntry to NEW VALUE (not add to existing)
-//     let userEntry = await SalaryEntry.findOne({
-//       createdBy: targetUser,
-//       article: product.article.toUpperCase(),
-//       gender: product.gender.toLowerCase(),
-//       product: product._id,
-//     }).sort({ createdAt: -1 });
-
-//     const newTotalCartons = actualAvailableCartons + increment;
-
-//     if (userEntry) {
-//       console.log(`✏️ UPDATING existing entry: ${userEntry.cartons} → ${newTotalCartons}`);
-//       userEntry.cartons = newTotalCartons;
-//       userEntry.totalPairs = newTotalCartons * product.pairPerCarton;
-//       await userEntry.save();
-//     } else {
-//       console.log(`🆕 CREATING new entry with ${increment} cartons`);
-//       userEntry = await SalaryEntry.create({
-//         createdBy: targetUser,
-//         article: product.article.toUpperCase(),
-//         gender: product.gender.toLowerCase(),
-//         cartons: increment,
-//         pairPerCarton: product.pairPerCarton,
-//         totalPairs: increment * product.pairPerCarton,
-//         product: id,
-//       });
-//     }
-
-//     // History record
-//     if (increment !== 0) {
-//       await History.create({
-//         product: product._id,
-//         action: 'UPDATE',
-//         oldValue: actualAvailableCartons,
-//         newValue: newTotalCartons,
-//         quantityChanged: increment,
-//         updatedBy: req.user?.id,
-//         updatedByName: targetUser,
-//         note: `${targetUser} updated cartons from ${actualAvailableCartons} to ${newTotalCartons}`,
-//         timestamp: new Date(),
-//       });
-//     }
-
-//     // Verify final state
-//     const finalAgg = await SalaryEntry.aggregate([
-//       { $match: { product: product._id } },
-//       { $group: { _id: null, total: { $sum: "$cartons" } } }
-//     ]);
-    
-//     console.log(`✅ FINAL RESULT: Total SalaryEntry cartons = ${finalAgg[0]?.total || 0}`);
-
-//     res.json({
-//       success: true,
-//       message: 'Product updated successfully',
-//       data: product,
-//       totalCartons: finalAgg[0]?.total || 0,
-//       debug: {
-//         actualAvailableCartons,
-//         increment,
-//         newTotalCartons,
-//         userChallanReduction
-//       }
-//     });
-//   } catch (err) {
-//     console.error('❌ updateProduct error:', err);
-//     res.status(400).json({ success: false, error: err.message });
-//   }
-// };
 
 exports.updateProduct = async (req, res) => {
   try {
@@ -630,6 +593,144 @@ exports.updateProduct = async (req, res) => {
 //   }
 // };
 
+// exports.createProduct = async (req, res) => {
+//   console.log("Create Product Request Body:", req.body);
+//   try {
+//     const requiredFields = ['article', 'stockType', 'gender', 'createdBy', 'mrp', 'rate'];
+//     const missing = requiredFields.filter(field => !req.body[field]);
+//     if (missing.length) {
+//       return res.status(400).json({ success: false, error: `Missing fields: ${missing.join(', ')}` });
+//     }
+
+//     const productData = {
+//       article: (req.body.article || '').toUpperCase(),
+//       stockType: (req.body.stockType || '').toLowerCase(),
+//       gender: (req.body.gender || '').toLowerCase(),
+//       color: (req.body.color || '').toUpperCase(),
+//       size: req.body.size || '',
+//       pairPerCarton: Number(req.body.pairPerCarton) || 0,
+//       mrp: Number(req.body.mrp),
+//       rate: parseFloat(Number(req.body.rate).toFixed(2)),
+//       series: (req.body.series || '').toUpperCase(),
+//       cartons: Number(req.body.cartons) || 0,
+//       createdBy: (req.body.createdBy || '').toUpperCase(),
+//     };
+    
+//     if (req.file) {
+//       productData.image = req.file.path;
+//     }
+
+//     const matchQuery = {
+//       article: productData.article,
+//       stockType: productData.stockType,
+//       gender: productData.gender,
+//       color: productData.color,
+//       size: productData.size,
+//     };
+
+//     // 2. Product ko find karo ya create karo
+//     let product = await Product.findOne(matchQuery);
+//     let isNewProduct = false;
+//     if (!product) {
+//       product = new Product(productData);
+//       await product.save();
+//       isNewProduct = true;
+//     }
+
+//     const cartonsToAdd = productData.cartons;
+
+//     // ✅ CRITICAL FIX: Check if user already has SalaryEntry for this product
+//     let existingUserEntry = await SalaryEntry.findOne({
+//       createdBy: productData.createdBy,
+//       article: productData.article,
+//       gender: productData.gender,
+//       product: product._id,
+//     }).sort({ createdAt: -1 });
+
+//     if (existingUserEntry) {
+//       // ✅ Update existing entry instead of creating new
+//       console.log(`🔄 UPDATING existing SalaryEntry for ${productData.createdBy}: ${existingUserEntry.cartons} + ${cartonsToAdd} = ${existingUserEntry.cartons + cartonsToAdd}`);
+      
+//       existingUserEntry.cartons += cartonsToAdd;
+//       existingUserEntry.totalPairs = existingUserEntry.cartons * productData.pairPerCarton;
+//       await existingUserEntry.save();
+      
+//       await History.create({
+//         product: product._id,
+//         action: 'UPDATE',
+//         salaryEntryId: existingUserEntry._id,
+//         quantityChanged: cartonsToAdd,
+//         updatedByName: productData.createdBy,
+//         note: `${productData.createdBy} added ${cartonsToAdd} cartons to existing product`,
+//         timestamp: new Date(),
+//       });
+//     } else {
+//       // ✅ Create new SalaryEntry only if user doesn't exist
+//       console.log(`🆕 CREATING new SalaryEntry for ${productData.createdBy} with ${cartonsToAdd} cartons`);
+      
+//       const newSalaryEntry = await SalaryEntry.create({
+//         createdBy: productData.createdBy,
+//         article: productData.article,
+//         gender: productData.gender,
+//         cartons: cartonsToAdd,
+//         pairPerCarton: productData.pairPerCarton,
+//         totalPairs: cartonsToAdd * productData.pairPerCarton,
+//         product: product._id,
+//       });
+
+//       await History.create({
+//         product: product._id,
+//         action: isNewProduct ? 'ADD' : 'UPDATE',
+//         salaryEntryId: newSalaryEntry._id,
+//         quantityChanged: cartonsToAdd,
+//         updatedByName: productData.createdBy,
+//         note: isNewProduct ? 'New product created' : 'Added cartons to existing product',
+//         timestamp: new Date(),
+//       });
+//     }
+
+//     // 5. Product ke total cartons ko recalculate karo
+//     const agg = await SalaryEntry.aggregate([
+//       { $match: { product: product._id } },
+//       { $group: { _id: null, total: { $sum: "$cartons" } } }
+//     ]);
+//     const totalSalaryCartons = agg[0]?.total || 0;
+
+//     // ✅ Get challan reductions
+//     const challanReductions = await History.aggregate([
+//       {
+//         $match: {
+//           product: product._id,
+//           action: 'CHALLAN_OUT'
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: null,
+//           totalOut: { $sum: { $abs: '$quantityChanged' } }
+//         }
+//       }
+//     ]);
+    
+//     const totalChallanOut = challanReductions[0]?.totalOut || 0;
+    
+//     // ✅ CORRECT: Product total = SalaryEntry total - challan outs
+//     product.cartons = Math.max(0, totalSalaryCartons - totalChallanOut);
+//     await product.save();
+
+//     console.log(`✅ FINAL: SalaryEntry Total=${totalSalaryCartons}, Challan Out=${totalChallanOut}, Product Total=${product.cartons}`);
+
+//     res.status(201).json({
+//       success: true,
+//       message: 'Product created/updated successfully',
+//       data: product,
+//     });
+//   } catch (err) {
+//     console.error("Create Product Error:", err);
+//     res.status(400).json({ success: false, error: err.message });
+//   }
+//};
+
 exports.createProduct = async (req, res) => {
   console.log("Create Product Request Body:", req.body);
   try {
@@ -640,17 +741,17 @@ exports.createProduct = async (req, res) => {
     }
 
     const productData = {
-      article: (req.body.article || '').toUpperCase(),
-      stockType: (req.body.stockType || '').toLowerCase(),
-      gender: (req.body.gender || '').toLowerCase(),
-      color: (req.body.color || '').toUpperCase(),
-      size: req.body.size || '',
+      article: (req.body.article || '').toUpperCase().trim(),
+      stockType: (req.body.stockType || '').toLowerCase().trim(),
+      gender: (req.body.gender || '').toLowerCase().trim(),
+      color: (req.body.color || '').toUpperCase().trim(),
+      size: (req.body.size || '').trim(),
       pairPerCarton: Number(req.body.pairPerCarton) || 0,
       mrp: Number(req.body.mrp),
       rate: parseFloat(Number(req.body.rate).toFixed(2)),
-      series: (req.body.series || '').toUpperCase(),
+      series: (req.body.series || '').toUpperCase().trim(),
       cartons: Number(req.body.cartons) || 0,
-      createdBy: (req.body.createdBy || '').toUpperCase(),
+      createdBy: (req.body.createdBy || '').toUpperCase().trim(),
     };
     
     if (req.file) {
@@ -665,7 +766,6 @@ exports.createProduct = async (req, res) => {
       size: productData.size,
     };
 
-    // 2. Product ko find karo ya create karo
     let product = await Product.findOne(matchQuery);
     let isNewProduct = false;
     if (!product) {
@@ -676,7 +776,6 @@ exports.createProduct = async (req, res) => {
 
     const cartonsToAdd = productData.cartons;
 
-    // ✅ CRITICAL FIX: Check if user already has SalaryEntry for this product
     let existingUserEntry = await SalaryEntry.findOne({
       createdBy: productData.createdBy,
       article: productData.article,
@@ -685,12 +784,14 @@ exports.createProduct = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (existingUserEntry) {
-      // ✅ Update existing entry instead of creating new
       console.log(`🔄 UPDATING existing SalaryEntry for ${productData.createdBy}: ${existingUserEntry.cartons} + ${cartonsToAdd} = ${existingUserEntry.cartons + cartonsToAdd}`);
       
       existingUserEntry.cartons += cartonsToAdd;
       existingUserEntry.totalPairs = existingUserEntry.cartons * productData.pairPerCarton;
       await existingUserEntry.save();
+      
+      // ✅ FIX 1: Wait for write to complete
+      await new Promise(resolve => setImmediate(resolve));
       
       await History.create({
         product: product._id,
@@ -702,7 +803,6 @@ exports.createProduct = async (req, res) => {
         timestamp: new Date(),
       });
     } else {
-      // ✅ Create new SalaryEntry only if user doesn't exist
       console.log(`🆕 CREATING new SalaryEntry for ${productData.createdBy} with ${cartonsToAdd} cartons`);
       
       const newSalaryEntry = await SalaryEntry.create({
@@ -715,6 +815,9 @@ exports.createProduct = async (req, res) => {
         product: product._id,
       });
 
+      // ✅ FIX 1: Wait for write to complete
+      await new Promise(resolve => setImmediate(resolve));
+
       await History.create({
         product: product._id,
         action: isNewProduct ? 'ADD' : 'UPDATE',
@@ -726,14 +829,21 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // 5. Product ke total cartons ko recalculate karo
+    // ✅ FIX 2: Aggregation with fallback to manual count
     const agg = await SalaryEntry.aggregate([
       { $match: { product: product._id } },
       { $group: { _id: null, total: { $sum: "$cartons" } } }
     ]);
     const totalSalaryCartons = agg[0]?.total || 0;
 
-    // ✅ Get challan reductions
+    let finalSalaryTotal = totalSalaryCartons;
+    if (totalSalaryCartons === 0) {
+      console.log("⚠️ Aggregation returned 0, doing manual count...");
+      const manualEntries = await SalaryEntry.find({ product: product._id }).select('cartons');
+      finalSalaryTotal = manualEntries.reduce((sum, entry) => sum + entry.cartons, 0);
+      console.log(`✅ Manual count: ${finalSalaryTotal}`);
+    }
+
     const challanReductions = await History.aggregate([
       {
         $match: {
@@ -751,11 +861,11 @@ exports.createProduct = async (req, res) => {
     
     const totalChallanOut = challanReductions[0]?.totalOut || 0;
     
-    // ✅ CORRECT: Product total = SalaryEntry total - challan outs
-    product.cartons = Math.max(0, totalSalaryCartons - totalChallanOut);
+    // ✅ FIX 3: Use finalSalaryTotal
+    product.cartons = Math.max(0, finalSalaryTotal - totalChallanOut);
     await product.save();
 
-    console.log(`✅ FINAL: SalaryEntry Total=${totalSalaryCartons}, Challan Out=${totalChallanOut}, Product Total=${product.cartons}`);
+    console.log(`✅ FINAL: SalaryEntry Total=${finalSalaryTotal}, Challan Out=${totalChallanOut}, Product Total=${product.cartons}`);
 
     res.status(201).json({
       success: true,
@@ -769,112 +879,13 @@ exports.createProduct = async (req, res) => {
 };
 
 
+
 // 4. Get Stock History (OPTIONAL: Now recommended to use separate History collection API)
 exports.getStockHistory = async (req, res) => {
   // If you want to keep old embedded history aggregation, else create new HistoryController and route
   res.status(501).json({ success: false, error: 'Use new History API endpoint /api/history' });
 };
 
-
-
-
-// exports.getSalaryReport = async (req, res) => {
-//   try {
-//     const { from, to, worker } = req.query;
-
-//     const query = {
-//       createdAt: {
-//         $gte: new Date(from),
-//         $lte: new Date(to + 'T23:59:59.999Z')
-//       }
-//     };
-
-//     if (worker && worker !== 'all') {
-//       query.createdBy = worker.toUpperCase();
-//     }
-
-//     // ✅ Ab SalaryEntry ke sath product bhi le aayenge
-//     let records = await SalaryEntry.find(query)
-//       .populate({
-//         path: 'product',
-//         match: { isDeleted: false }, // Sirf wo product jinka isDeleted=false ho
-//         select: '_id'
-//       })
-//       .select('createdBy article gender cartons pairPerCarton totalPairs createdAt product');
-
-//     // ✅ Filter karo jisme product null ho (iska matlab product delete ho gaya hai)
-//     records = records.filter(r => r.product);
-
-//     const workerContributions = {};
-
-//     records.forEach(record => {
-//       const w = record.createdBy;
-//       const art = record.article;
-//       const dateStr = record.createdAt.toISOString().split('T')[0];
-
-//       if (!workerContributions[w]) {
-//         workerContributions[w] = { worker: w, articles: [] };
-//       }
-
-//       workerContributions[w].articles.push({
-//         article: art,
-//         gender: record.gender,
-//         cartons: record.cartons,
-//         pairs: record.totalPairs,
-//         date: dateStr
-//       });
-//     });
-
-//     const report = Object.values(workerContributions);
-
-//     res.json({ success: true, data: report });
-//   } catch (err) {
-//     res.status(500).json({ success: false, error: err.message });
-//   }
-// };
-
-// 6. Get Products (with filters)
-// exports.getProducts = async (req, res) => {
-//   try {
-//     const {
-//       search,
-//       stockType,
-//       gender,
-//       color,
-//       size,
-//       minCartons,
-//       maxCartons,
-//       sortBy = 'article',
-//       sortOrder = 'asc'
-//     } = req.query;
-
-//     const filter = { isDeleted: false };
-//     const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
-
-//     if (search) filter.article = { $regex: search, $options: 'i' };
-//     if (stockType) filter.stockType = stockType;
-//     if (gender) filter.gender = gender;
-//     if (color) filter.color = { $regex: `^${color}$`, $options: 'i' };
-
-//     if (size) filter.size = size;
-//     if (minCartons) filter.cartons = { $gte: Number(minCartons) };
-//     if (maxCartons) filter.cartons = { ...filter.cartons, $lte: Number(maxCartons) };
-
-//     const products = await Product.find(filter)
-//       .sort(sortOptions);
-
-//     res.json({
-//       success: true,
-//       count: products.length,
-//       data: products
-//     });
-//   } catch (err) {
-//     res.status(500).json({
-//       success: false,
-//       error: err.message
-//     });
-//   }
-// };
 // // new 
  // 6. Get Products (with filters) - ✅ OPTIMIZED VERSION
 exports.getProducts = async (req, res) => {
@@ -1393,3 +1404,98 @@ exports.getAllUserEntriesForProduct = async (req, res) => {
 };
 
 
+// exports.debugSingleProduct = async (req, res) => {
+//   try {
+//     const { article } = req.query; // ?article=FL-431
+    
+//     if (!article) {
+//       return res.status(400).json({ error: "Article required" });
+//     }
+
+//     const products = await Product.find({ 
+//       article: article.toUpperCase(),
+//       isDeleted: false 
+//     }).limit(1);
+
+//     if (!products.length) {
+//       return res.json({ error: "Product not found" });
+//     }
+
+//     const product = products[0];
+    
+//     console.log("\n=== DEBUG INFO ===");
+//     console.log("Product ID:", product._id);
+//     console.log("Product Article:", product.article);
+//     console.log("Product Gender:", product.gender);
+//     console.log("Product Color:", product.color);
+//     console.log("Product Size:", product.size);
+//     console.log("Product Current Cartons:", product.cartons);
+
+//     // Check SalaryEntry with different match criteria
+//     console.log("\n--- SalaryEntry Checks ---");
+    
+//     // Check 1: By product ID only
+//     const byProductId = await SalaryEntry.find({ 
+//       product: product._id 
+//     });
+//     console.log("By Product ID count:", byProductId.length);
+//     console.log("By Product ID data:", byProductId);
+
+//     // Check 2: By article + gender
+//     const byArticle = await SalaryEntry.find({ 
+//       article: product.article.toUpperCase(),
+//       gender: product.gender.toLowerCase()
+//     });
+//     console.log("\nBy Article+Gender count:", byArticle.length);
+//     console.log("By Article+Gender data:", byArticle);
+
+//     // Check 3: Manual sum
+//     const manualSum = byProductId.reduce((sum, entry) => {
+//       console.log(`Entry: ${entry.createdBy} = ${entry.cartons} cartons`);
+//       return sum + entry.cartons;
+//     }, 0);
+//     console.log("\nManual Sum:", manualSum);
+
+//     // Check History
+//     const historyRecords = await History.find({
+//       product: product._id,
+//       action: { $in: ['ADD', 'UPDATE'] }
+//     }).sort({ timestamp: -1 }).limit(5);
+    
+//     console.log("\n--- History Records ---");
+//     historyRecords.forEach(h => {
+//       console.log(`${h.action}: ${h.quantityChanged} by ${h.updatedByName} at ${h.timestamp}`);
+//     });
+
+//     // Check Challan
+//     const challanOut = await History.find({
+//       product: product._id,
+//       action: 'CHALLAN_OUT'
+//     });
+//     console.log("\n--- Challan Records ---");
+//     console.log("Challan Out count:", challanOut.length);
+    
+//     const totalChallan = challanOut.reduce((sum, c) => sum + Math.abs(c.quantityChanged), 0);
+//     console.log("Total Challan Out:", totalChallan);
+
+//     console.log("\n=== CALCULATION ===");
+//     console.log("Expected: SalaryEntry Sum - Challan");
+//     console.log(`Expected: ${manualSum} - ${totalChallan} = ${manualSum - totalChallan}`);
+//     console.log(`Actual in DB: ${product.cartons}`);
+
+//     res.json({
+//       success: true,
+//       productId: product._id,
+//       article: product.article,
+//       currentCartons: product.cartons,
+//       salaryEntryCount: byProductId.length,
+//       salaryEntrySum: manualSum,
+//       challanOut: totalChallan,
+//       expectedCartons: Math.max(0, manualSum - totalChallan),
+//       needsFix: product.cartons !== Math.max(0, manualSum - totalChallan)
+//     });
+//   } catch (err) {
+//     console.error("Debug error:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };

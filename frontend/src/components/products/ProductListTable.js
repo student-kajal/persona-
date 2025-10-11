@@ -378,181 +378,424 @@ const ProductListTable = ({ products, loading, title, onRefresh }) => {
     }
   };
 
-  const handleExportMatrixExcel = async () => {
-    const exportRows = selected.length > 0
-      ? filteredProducts.filter((p) => selected.includes(p._id))
-      : filteredProducts;
+//   const handleExportMatrixExcel = async () => {
+//     const exportRows = selected.length > 0
+//       ? filteredProducts.filter((p) => selected.includes(p._id))
+//       : filteredProducts;
 
-    const groupedByCategory = {};
-    exportRows.forEach((product) => {
-      const groupInfo = getVirtualGroup(product.stockType, product.gender);
-      const groupKey = groupInfo.group;
-      const articleKey = `${product.article}-${product.gender}`;
-      if (!groupedByCategory[groupKey]) groupedByCategory[groupKey] = {};
-      if (!groupedByCategory[groupKey][articleKey]) {
-        groupedByCategory[groupKey][articleKey] = {
-          article: product.article,
-          gender: product.gender,
-          stockType: product.stockType,
-          series: product.series,
-          variants: [],
-        };
-      }
-      groupedByCategory[groupKey][articleKey].variants.push(product);
-    });
+//     const groupedByCategory = {};
+//     exportRows.forEach((product) => {
+//       const groupInfo = getVirtualGroup(product.stockType, product.gender);
+//       const groupKey = groupInfo.group;
+//       const articleKey = `${product.article}-${product.gender}`;
+//       if (!groupedByCategory[groupKey]) groupedByCategory[groupKey] = {};
+//       if (!groupedByCategory[groupKey][articleKey]) {
+//         groupedByCategory[groupKey][articleKey] = {
+//           article: product.article,
+//           gender: product.gender,
+//           stockType: product.stockType,
+//           series: product.series,
+//           variants: [],
+//         };
+//       }
+//       groupedByCategory[groupKey][articleKey].variants.push(product);
+//     });
 
-    const categoryOrder = [
-      "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
-      "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
-    ];
+//     const categoryOrder = [
+//       "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
+//       "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
+//     ];
 
-    const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
-      const idxA = categoryOrder.indexOf(a);
-      const idxB = categoryOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-    });
+//     const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
+//       const idxA = categoryOrder.indexOf(a);
+//       const idxB = categoryOrder.indexOf(b);
+//       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+//       if (idxA !== -1) return -1;
+//       if (idxB !== -1) return 1;
+//       return a.localeCompare(b);
+//     });
 
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Stock Matrix");
+//     const wb = new ExcelJS.Workbook();
+//     const ws = wb.addWorksheet("Stock Matrix");
 
-    const articleImages = {};
-    if (matrixExportType === "withImage") {
-      const imagePromises = [];
-      for (const [, articles] of sortedCategories) {
-        for (const articleGroup of Object.values(articles)) {
-          const imgVariant = articleGroup.variants.find((v) => v.image);
-          if (imgVariant && imgVariant.image) {
-            imagePromises.push(
-              (async () => {
-                const base64 = await getImageBase64(imgVariant.image);
-                if (base64) {
-                  let ext = "png";
-                  const url = imgVariant.image.toLowerCase();
-                  if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
-                  else if (url.includes(".webp")) ext = "webp";
-                  else if (url.includes(".gif")) ext = "gif";
-                  articleImages[articleGroup.article] = { base64, ext };
-                }
-              })()
-            );
-          }
+//     const articleImages = {};
+//     if (matrixExportType === "withImage") {
+//       const imagePromises = [];
+//       for (const [, articles] of sortedCategories) {
+//         for (const articleGroup of Object.values(articles)) {
+//           const imgVariant = articleGroup.variants.find((v) => v.image);
+//           if (imgVariant && imgVariant.image) {
+//             imagePromises.push(
+//               (async () => {
+//                 const base64 = await getImageBase64(imgVariant.image);
+//                 if (base64) {
+//                   let ext = "png";
+//                   const url = imgVariant.image.toLowerCase();
+//                   if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
+//                   else if (url.includes(".webp")) ext = "webp";
+//                   else if (url.includes(".gif")) ext = "gif";
+//                   articleImages[articleGroup.article] = { base64, ext };
+//                 }
+//               })()
+//             );
+//           }
+//         }
+//       }
+//       await Promise.all(imagePromises);
+//     }
+
+//     for (const [groupName, articleGroups] of sortedCategories) {
+//       ws.addRow([`${groupName}`]);
+//       ws.lastRow.font = { bold: true, color: { argb: 'FF1A237E' } };
+
+//       const sizeSet = new Set();
+//       Object.values(articleGroups).forEach((articleGroup) => {
+//         if (!articleGroup?.variants) return;
+//         articleGroup.variants.forEach((v) => {
+//           if (v.size) sizeSet.add(v.size.trim().toUpperCase());
+//         });
+//       });
+//       const sortedSizes = [...sizeSet].sort((a, b) =>
+//         isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b)
+//       );
+
+//       const headerRow = matrixExportType === "withImage"
+//         ? ["Article", "Image", "Color", ...sortedSizes]
+//         : ["Article", "Color", ...sortedSizes];
+
+//       const articleBlocks = Object.values(articleGroups).map((articleGroup) => {
+//         if (!articleGroup) return null;
+//         const blockRows = [];
+//         const colorMap = {};
+//         articleGroup.variants.forEach((v) => {
+//           const color = v.color?.trim() || "DEFAULT";
+//           const size = v.size?.trim().toUpperCase();
+//           if (!colorMap[color]) colorMap[color] = {};
+//           colorMap[color][size] = (colorMap[color][size] || 0) + (v.cartons || 0);
+//         });
+//         let imageHandled = false;
+//         let imageId = null;
+//         if (matrixExportType === "withImage" && articleImages[articleGroup.article]) {
+//           const img = articleImages[articleGroup.article];
+//           imageId = wb.addImage({
+//             base64: `data:image/${img.ext};base64,${img.base64}`,
+//             extension: img.ext,
+//           });
+//         }
+//         for (const [color, sizeMap] of Object.entries(colorMap)) {
+//           const row = matrixExportType === "withImage"
+//             ? [imageHandled ? '' : articleGroup.article, '', color]
+//             : [imageHandled ? '' : articleGroup.article, color];
+//           sortedSizes.forEach(sz => {
+//             row.push(sizeMap[sz] !== undefined ? sizeMap[sz] : '');
+//           });
+//           blockRows.push(row);
+//           imageHandled = true;
+//         }
+//         return {
+//           blockRows,
+//           imageId,
+//           blockCols: matrixExportType === "withImage" ? 3 + sortedSizes.length : 2 + sortedSizes.length
+//         };
+//       }).filter(Boolean);
+
+//       const chunkSize = 3;
+//       let isFirstChunk = true;
+
+//       for (let i = 0; i < articleBlocks.length; i += chunkSize) {
+//         const chunk = articleBlocks.slice(i, i + chunkSize);
+
+//         if (isFirstChunk) {
+//           let chunkHeader = [];
+//           chunk.forEach(() => {
+//             chunkHeader.push(...headerRow);
+//           });
+//           ws.addRow(chunkHeader);
+//           ws.lastRow.font = { bold: true };
+//           isFirstChunk = false;
+//         }
+
+//         const maxBlockRows = Math.max(...chunk.map((b) => b.blockRows.length));
+//         chunk.forEach((b) => {
+//           while (b.blockRows.length < maxBlockRows)
+//             b.blockRows.push(new Array(b.blockCols).fill(""));
+//         });
+
+//         const startRowNum = ws.lastRow.number + 1;
+//         for (let r = 0; r < maxBlockRows; r++) {
+//           let bigRow = [];
+//           chunk.forEach((b) => bigRow.push(...b.blockRows[r]));
+//           ws.addRow(bigRow);
+//         }
+//         ws.addRow([]);
+
+//         chunk.forEach((b, idx) => {
+//           if (matrixExportType === "withImage" && b.imageId) {
+//             const blockColOffset = idx * b.blockCols + 1;
+//             ws.mergeCells(startRowNum, blockColOffset + 1, startRowNum + 1, blockColOffset + 2);
+//             ws.addImage(b.imageId, {
+//               tl: { col: blockColOffset + 0.1, row: startRowNum - 0.8 },
+//               ext: { width: 60, height: 60 },
+//               editAs: "oneCell"
+//             });
+//           }
+//         });
+//       }
+//     }
+
+//     ws.columns.forEach((col) => { col.width = 14; });
+//     const buf = await wb.xlsx.writeBuffer();
+//    // saveAs(new Blob([buf]), "Stock-Matrix-Export.xlsx");
+//    triggerDownload(
+//   new Blob([buf], {
+//     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+//   }),
+//   'Stock-Matrix-Export.xlsx'
+// );
+//   };
+const handleExportMatrixExcel = async () => {
+  const exportRows = selected.length > 0
+    ? filteredProducts.filter((p) => selected.includes(p._id))
+    : filteredProducts;
+
+  const groupedByCategory = {};
+  exportRows.forEach((product) => {
+    const groupInfo = getVirtualGroup(product.stockType, product.gender);
+    const groupKey = groupInfo.group;
+    const articleKey = `${product.article}-${product.gender}`;
+    if (!groupedByCategory[groupKey]) groupedByCategory[groupKey] = {};
+    if (!groupedByCategory[groupKey][articleKey]) {
+      groupedByCategory[groupKey][articleKey] = {
+        article: product.article,
+        gender: product.gender,
+        stockType: product.stockType,
+        series: product.series,
+        variants: [],
+      };
+    }
+    groupedByCategory[groupKey][articleKey].variants.push(product);
+  });
+
+  const categoryOrder = [
+    "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
+    "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
+  ];
+
+  const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
+    const idxA = categoryOrder.indexOf(a);
+    const idxB = categoryOrder.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Stock Matrix");
+
+  const articleImages = {};
+  if (matrixExportType === "withImage") {
+    const imagePromises = [];
+    for (const [, articles] of sortedCategories) {
+      for (const articleGroup of Object.values(articles)) {
+        const imgVariant = articleGroup.variants.find((v) => v.image);
+        if (imgVariant && imgVariant.image) {
+          imagePromises.push(
+            (async () => {
+              const base64 = await getImageBase64(imgVariant.image);
+              if (base64) {
+                let ext = "png";
+                const url = imgVariant.image.toLowerCase();
+                if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
+                else if (url.includes(".webp")) ext = "webp";
+                else if (url.includes(".gif")) ext = "gif";
+                articleImages[articleGroup.article] = { base64, ext };
+              }
+            })()
+          );
         }
       }
-      await Promise.all(imagePromises);
     }
+    await Promise.all(imagePromises);
+  }
 
-    for (const [groupName, articleGroups] of sortedCategories) {
-      ws.addRow([`${groupName}`]);
-      ws.lastRow.font = { bold: true, color: { argb: 'FF1A237E' } };
+  for (const [groupName, articleGroups] of sortedCategories) {
+    ws.addRow([`${groupName}`]);
+    ws.lastRow.font = { bold: true, color: { argb: 'FF1A237E' } };
 
-      const sizeSet = new Set();
-      Object.values(articleGroups).forEach((articleGroup) => {
-        if (!articleGroup?.variants) return;
-        articleGroup.variants.forEach((v) => {
-          if (v.size) sizeSet.add(v.size.trim().toUpperCase());
-        });
+    const sizeSet = new Set();
+    Object.values(articleGroups).forEach((articleGroup) => {
+      if (!articleGroup?.variants) return;
+      articleGroup.variants.forEach((v) => {
+        if (v.size) sizeSet.add(v.size.trim().toUpperCase());
       });
-      const sortedSizes = [...sizeSet].sort((a, b) =>
-        isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b)
+    });
+    const sortedSizes = [...sizeSet].sort((a, b) =>
+      isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b)
+    );
+
+    const headerRow = matrixExportType === "withImage"
+      ? ["ART", "", "COLOR", ...sortedSizes]
+      : ["ART", "COLOR", ...sortedSizes];
+
+    const articleBlocks = Object.values(articleGroups).map((articleGroup) => {
+      if (!articleGroup) return null;
+      const blockRows = [];
+      const colorMap = {};
+      articleGroup.variants.forEach((v) => {
+        const color = v.color?.trim() || "DEFAULT";
+        const size = v.size?.trim().toUpperCase();
+        if (!colorMap[color]) colorMap[color] = {};
+        colorMap[color][size] = (colorMap[color][size] || 0) + (v.cartons || 0);
+      });
+      let imageHandled = false;
+      let imageId = null;
+      if (matrixExportType === "withImage" && articleImages[articleGroup.article]) {
+        const img = articleImages[articleGroup.article];
+        imageId = wb.addImage({
+          base64: `data:image/${img.ext};base64,${img.base64}`,
+          extension: img.ext,
+        });
+      }
+      for (const [color, sizeMap] of Object.entries(colorMap)) {
+        const row = matrixExportType === "withImage"
+          ? [imageHandled ? '' : articleGroup.article, '', color]
+          : [imageHandled ? '' : articleGroup.article, color];
+        sortedSizes.forEach(sz => {
+          row.push(sizeMap[sz] !== undefined ? sizeMap[sz] : '');
+        });
+        blockRows.push(row);
+        imageHandled = true;
+      }
+      return {
+        blockRows,
+        imageId,
+        blockCols: matrixExportType === "withImage" ? 3 + sortedSizes.length : 2 + sortedSizes.length,
+        article: articleGroup.article
+      };
+    }).filter(Boolean);
+
+    // ✅ 3-COLUMN COMPRESSED LAYOUT
+    const ARTICLES_PER_COLUMN = 30; // Adjust based on page height
+    const COLUMNS_PER_ROW = 3;
+    
+    const totalArticles = articleBlocks.length;
+    const totalColumns = Math.ceil(totalArticles / ARTICLES_PER_COLUMN);
+
+    for (let colSet = 0; colSet < totalColumns; colSet += COLUMNS_PER_ROW) {
+      // Header row for 3 columns
+      const headerRowFull = [];
+      for (let i = 0; i < COLUMNS_PER_ROW; i++) {
+        if (colSet + i < totalColumns) {
+          headerRowFull.push(...headerRow);
+        }
+      }
+      ws.addRow(headerRowFull);
+      ws.lastRow.font = { bold: true };
+
+      // Determine max rows in this set of 3 columns
+      const columnsData = [];
+      for (let i = 0; i < COLUMNS_PER_ROW; i++) {
+        const colIdx = colSet + i;
+        if (colIdx < totalColumns) {
+          const startArticle = colIdx * ARTICLES_PER_COLUMN;
+          const endArticle = Math.min(startArticle + ARTICLES_PER_COLUMN, totalArticles);
+          columnsData.push(articleBlocks.slice(startArticle, endArticle));
+        } else {
+          columnsData.push([]);
+        }
+      }
+
+      // Calculate total rows needed (sum of all color rows across all articles in each column)
+      const maxRowsPerColumn = columnsData.map(col => 
+        col.reduce((sum, block) => sum + block.blockRows.length, 0)
       );
+      const maxRows = Math.max(...maxRowsPerColumn);
 
-      const headerRow = matrixExportType === "withImage"
-        ? ["Article", "Image", "Color", ...sortedSizes]
-        : ["Article", "Color", ...sortedSizes];
+      const startRowNum = ws.lastRow.number + 1;
+     // let currentRowInColumns = columnsData.map(() => 0);
+      let currentArticleInColumns = columnsData.map(() => 0);
+      let currentColorInArticle = columnsData.map(() => 0);
 
-      const articleBlocks = Object.values(articleGroups).map((articleGroup) => {
-        if (!articleGroup) return null;
-        const blockRows = [];
-        const colorMap = {};
-        articleGroup.variants.forEach((v) => {
-          const color = v.color?.trim() || "DEFAULT";
-          const size = v.size?.trim().toUpperCase();
-          if (!colorMap[color]) colorMap[color] = {};
-          colorMap[color][size] = (colorMap[color][size] || 0) + (v.cartons || 0);
-        });
-        let imageHandled = false;
-        let imageId = null;
-        if (matrixExportType === "withImage" && articleImages[articleGroup.article]) {
-          const img = articleImages[articleGroup.article];
-          imageId = wb.addImage({
-            base64: `data:image/${img.ext};base64,${img.base64}`,
-            extension: img.ext,
-          });
-        }
-        for (const [color, sizeMap] of Object.entries(colorMap)) {
-          const row = matrixExportType === "withImage"
-            ? [imageHandled ? '' : articleGroup.article, '', color]
-            : [imageHandled ? '' : articleGroup.article, color];
-          sortedSizes.forEach(sz => {
-            row.push(sizeMap[sz] !== undefined ? sizeMap[sz] : '');
-          });
-          blockRows.push(row);
-          imageHandled = true;
-        }
-        return {
-          blockRows,
-          imageId,
-          blockCols: matrixExportType === "withImage" ? 3 + sortedSizes.length : 2 + sortedSizes.length
-        };
-      }).filter(Boolean);
-
-      const chunkSize = 3;
-      let isFirstChunk = true;
-
-      for (let i = 0; i < articleBlocks.length; i += chunkSize) {
-        const chunk = articleBlocks.slice(i, i + chunkSize);
-
-        if (isFirstChunk) {
-          let chunkHeader = [];
-          chunk.forEach(() => {
-            chunkHeader.push(...headerRow);
-          });
-          ws.addRow(chunkHeader);
-          ws.lastRow.font = { bold: true };
-          isFirstChunk = false;
-        }
-
-        const maxBlockRows = Math.max(...chunk.map((b) => b.blockRows.length));
-        chunk.forEach((b) => {
-          while (b.blockRows.length < maxBlockRows)
-            b.blockRows.push(new Array(b.blockCols).fill(""));
-        });
-
-        const startRowNum = ws.lastRow.number + 1;
-        for (let r = 0; r < maxBlockRows; r++) {
-          let bigRow = [];
-          chunk.forEach((b) => bigRow.push(...b.blockRows[r]));
-          ws.addRow(bigRow);
-        }
-        ws.addRow([]);
-
-        chunk.forEach((b, idx) => {
-          if (matrixExportType === "withImage" && b.imageId) {
-            const blockColOffset = idx * b.blockCols + 1;
-            ws.mergeCells(startRowNum, blockColOffset + 1, startRowNum + 1, blockColOffset + 2);
-            ws.addImage(b.imageId, {
-              tl: { col: blockColOffset + 0.1, row: startRowNum - 0.8 },
-              ext: { width: 60, height: 60 },
-              editAs: "oneCell"
-            });
+      // Fill rows horizontally across 3 columns
+      for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+        const fullRow = [];
+        
+        for (let colIdx = 0; colIdx < COLUMNS_PER_ROW; colIdx++) {
+          const column = columnsData[colIdx];
+          
+          if (currentArticleInColumns[colIdx] < column.length) {
+            const currentBlock = column[currentArticleInColumns[colIdx]];
+            const colorIdx = currentColorInArticle[colIdx];
+            
+            if (colorIdx < currentBlock.blockRows.length) {
+              fullRow.push(...currentBlock.blockRows[colorIdx]);
+              currentColorInArticle[colIdx]++;
+              
+              // Move to next article if all colors done
+              if (currentColorInArticle[colIdx] >= currentBlock.blockRows.length) {
+                currentArticleInColumns[colIdx]++;
+                currentColorInArticle[colIdx] = 0;
+              }
+            } else {
+              // Empty cells
+              fullRow.push(...new Array(currentBlock.blockCols).fill(''));
+            }
+          } else {
+            // Empty cells if column finished
+            const emptyCols = matrixExportType === "withImage" ? 3 + sortedSizes.length : 2 + sortedSizes.length;
+            fullRow.push(...new Array(emptyCols).fill(''));
           }
-        });
+        }
+        
+        ws.addRow(fullRow);
+      }
+
+      // Add images
+     if (matrixExportType === "withImage") {
+      const blockWidth = 3 + sortedSizes.length;
+      
+      for (let colIdx = 0; colIdx < COLUMNS_PER_ROW; colIdx++) {
+        const column = columnsData[colIdx];
+        if (!column || column.length === 0) continue;
+        
+        let currentRow = startRowNum;
+        
+        for (let artIdx = 0; artIdx < column.length; artIdx++) {
+          const block = column[artIdx];
+          
+          if (block && block.imageId) {
+            const baseCol = colIdx * blockWidth + 1;
+            
+            try {
+              ws.mergeCells(currentRow, baseCol + 1, currentRow + 1, baseCol + 2);
+              ws.addImage(block.imageId, {
+                tl: { col: baseCol + 0.1, row: currentRow - 0.8 },
+                ext: { width: 60, height: 60 },
+                editAs: "oneCell"
+              });
+            } catch (err) {
+              console.warn(`Image skip: ${block.article}`);
+            }
+          }
+          
+          currentRow += block.blockRows.length;
+        }
       }
     }
 
-    ws.columns.forEach((col) => { col.width = 14; });
-    const buf = await wb.xlsx.writeBuffer();
-   // saveAs(new Blob([buf]), "Stock-Matrix-Export.xlsx");
-   triggerDownload(
-  new Blob([buf], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  }),
-  'Stock-Matrix-Export.xlsx'
-);
-  };
+    ws.addRow([]); // Separator
+  }
+}
+  ws.columns.forEach((col) => { col.width = 10; });
+  const buf = await wb.xlsx.writeBuffer();
+  triggerDownload(
+    new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    }),
+    'Stock-Matrix-Export.xlsx'
+  );
+};
 
   const handleGeneratePDF = async () => {
     let idsToExport = [];

@@ -267,6 +267,110 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
     await session.endSession();
   }
 };
+
+// exports.recoverProductsFromHistory = async (req, res) => {
+//   try {
+//     console.log("🔄 Starting recovery from History...\n");
+    
+//     const products = await Product.find({});
+//     let recovered = 0;
+//     let failed = 0;
+    
+//     for (const product of products) {
+//       try {
+//         // Get history data
+//         const salaryAdditions = await History.find({
+//           product: product._id,
+//           action: { $in: ['ADD', 'UPDATE'] }
+//         });
+        
+//         const totalSalaryCartons = salaryAdditions.reduce((sum, h) => {
+//           return sum + (h.quantityChanged || 0);
+//         }, 0);
+        
+//         const challanOuts = await History.find({
+//           product: product._id,
+//           action: 'CHALLAN_OUT'
+//         });
+        
+//         const totalChallanOut = challanOuts.reduce((sum, h) => {
+//           return sum + Math.abs(h.quantityChanged || 0);
+//         }, 0);
+        
+//         const challanIns = await History.find({
+//           product: product._id,
+//           action: 'CHALLAN_IN'
+//         });
+        
+//         const totalChallanIn = challanIns.reduce((sum, h) => {
+//           return sum + Math.abs(h.quantityChanged || 0);
+//         }, 0);
+        
+//         const correctCartons = Math.max(0, totalSalaryCartons - totalChallanOut + totalChallanIn);
+        
+//         // Rebuild SalaryEntry
+//         await SalaryEntry.deleteMany({ product: product._id });
+        
+//         const userMap = new Map();
+//         salaryAdditions.forEach(h => {
+//           const user = h.updatedByName || 'UNKNOWN';
+//           const current = userMap.get(user) || 0;
+//           userMap.set(user, current + (h.quantityChanged || 0));
+//         });
+        
+//         for (const [user, cartons] of userMap) {
+//           if (cartons > 0) {
+//             await SalaryEntry.create({
+//               createdBy: user,
+//               article: product.article,
+//               gender: product.gender,
+//               cartons: cartons,
+//               pairPerCarton: product.pairPerCarton,
+//               totalPairs: cartons * product.pairPerCarton,
+//               product: product._id
+//             });
+//           }
+//         }
+        
+//         // Update product
+//         const oldCartons = product.cartons;
+//         product.cartons = correctCartons;
+//         product.isDeleted = false;
+//         await product.save();
+        
+//         if (oldCartons !== correctCartons) {
+//           console.log(`✅ ${product.article} (${product.size}x${product.color}): ${oldCartons} → ${correctCartons}`);
+//           recovered++;
+//         }
+        
+//       } catch (err) {
+//         console.error(`❌ Failed: ${product.article}:`, err.message);
+//         failed++;
+//       }
+//     }
+    
+//     console.log(`\n✅ RECOVERY COMPLETE:`);
+//     console.log(`   - Products recovered: ${recovered}`);
+//     console.log(`   - Failed: ${failed}`);
+//     console.log(`   - Total processed: ${products.length}`);
+    
+//     res.json({
+//       success: true,
+//       message: `Recovery completed: ${recovered} products restored`,
+//       recovered,
+//       failed,
+//       total: products.length
+//     });
+    
+//   } catch (err) {
+//     console.error('❌ Recovery error:', err);
+//     res.status(500).json({
+//       success: false,
+//       error: err.message
+//     });
+//   }
+// };
+
 // exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
 //   try {
 //     const { article, gender, size, color } = req.body;
