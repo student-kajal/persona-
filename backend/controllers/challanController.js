@@ -429,14 +429,43 @@ exports.checkStock = async (req, res) => {
 
 
 // Get available stock for UI (in cartons)
+// exports.getStockAvailable = async (req, res) => {
+//   const article = (req.query.article || '').trim().toUpperCase();
+//   const size = (req.query.size || '').trim().toUpperCase();
+//   const color = (req.query.color || '').trim().toUpperCase();
+
+//   if (!article || !size || !color) {
+//     return res.status(400).json({ error: "Missing parameters" });
+//   }
+//   try {
+//     const product = await Product.findOne({
+//       $expr: { $eq: [{ $toUpper: "$article" }, article] },
+//       size: { $regex: `^${size}$`, $options: 'i' },
+//       color: { $regex: `^${color}$`, $options: 'i' },
+//       isDeleted: false
+//     });
+
+//     if (!product) {
+//       return res.json({ availableCartons: 0 });
+//     }
+
+//     const availableCartons = product.cartons || 0;
+
+//     res.json({ availableCartons });
+//   } catch (err) {
+//     res.status(500).json({ error: "Server error" });
+//   }
+// };
+// ✅ FIXED: Calculate available stock from SalaryEntry - Challan
 exports.getStockAvailable = async (req, res) => {
   const article = (req.query.article || '').trim().toUpperCase();
-  const size = (req.query.size || '').trim().toUpperCase();
+  const size = (req.query.size || '').trim();
   const color = (req.query.color || '').trim().toUpperCase();
 
   if (!article || !size || !color) {
     return res.status(400).json({ error: "Missing parameters" });
   }
+  
   try {
     const product = await Product.findOne({
       $expr: { $eq: [{ $toUpper: "$article" }, article] },
@@ -449,11 +478,41 @@ exports.getStockAvailable = async (req, res) => {
       return res.json({ availableCartons: 0 });
     }
 
-    const availableCartons = product.cartons || 0;
+    // ✅ Calculate from SalaryEntry (source of truth)
+    const totalSalaryAgg = await SalaryEntry.aggregate([
+      { $match: { product: product._id } },
+      { $group: { _id: null, total: { $sum: "$cartons" } } }
+    ]);
+    const totalSalary = totalSalaryAgg[0]?.total || 0;
 
-    res.json({ availableCartons });
+    // ✅ Get existing challan out
+    const challanAgg = await History.aggregate([
+      {
+        $match: {
+          product: product._id,
+          action: 'CHALLAN_OUT'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalOut: { $sum: { $abs: '$quantityChanged' } }
+        }
+      }
+    ]);
+    const totalChallanOut = challanAgg[0]?.totalOut || 0;
+
+    // ✅ Available = SalaryEntry - Challan
+    const availableCartons = Math.max(0, totalSalary - totalChallanOut);
+
+    res.json({ 
+      availableCartons,
+      totalStock: totalSalary,
+      challanedOut: totalChallanOut
+    });
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    console.error('Stock availability error:', err);
+    res.status(500).json({ error: "Server error", details: err.message });
   }
 };
 
