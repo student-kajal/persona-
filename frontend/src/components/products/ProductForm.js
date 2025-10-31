@@ -225,11 +225,31 @@ const ProductForm = () => {
       if (!/^\d*\.?\d{0,2}$/.test(value)) return "Max 2 decimals";
       if (Number(value) > 10000) return "Max 10000";
     }
+    // if (name === "size" && manualSize && value !== "") {
+    //   if (!/^\d+[Xx]\d+$/.test(value)) return "Size must be like 5X8";
+    //   const [w, h] = value.toUpperCase().split("X").map(Number);
+    //   if (w < 1 || w > 20 || h < 1 || h > 20) return "Width/Height 1-20 only";
+    // }
     if (name === "size" && manualSize && value !== "") {
-      if (!/^\d+[Xx]\d+$/.test(value)) return "Size must be like 5X8";
-      const [w, h] = value.toUpperCase().split("X").map(Number);
-      if (w < 1 || w > 20 || h < 1 || h > 20) return "Width/Height 1-20 only";
+  const trimmed = value.trim().toUpperCase();
+  
+  // Numeric format (5X8)
+  const numericMatch = trimmed.match(/^(\d+)[Xx](\d+)$/);
+  if (numericMatch) {
+    const [, w, h] = numericMatch;
+    const wNum = parseInt(w, 10);
+    const hNum = parseInt(h, 10);
+    if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
+      return "Width/Height 1-20 only";
     }
+  }
+  // Pure alphabets
+  else if (!/^[A-Z]+$/.test(trimmed)) {
+    return "Only 5X8 or letters allowed";
+  }
+}
+
+
     return "";
   };
 
@@ -250,9 +270,15 @@ const ProductForm = () => {
     } else if (name === 'color') {
       const val = value.replace(/[^a-zA-Z0-9 _/.,-]/g, '').toUpperCase();
       setForm((f) => ({ ...f, color: val }));
+    // } else if (name === "size") {
+    //   const val = value.replace(/x/g, "X");
+    //   setForm((f) => ({ ...f, size: val }));
     } else if (name === "size") {
-      const val = value.replace(/x/g, "X");
-      setForm((f) => ({ ...f, size: val }));
+  // ✅ Convert to uppercase, replace x with X
+  const val = value.replace(/x/g, "X").toUpperCase();
+  setForm((f) => ({ ...f, size: val }));
+
+
     } else if (name === "article") {
       setForm(f => ({ ...f, article: value.toUpperCase() }));
     } else {
@@ -362,25 +388,49 @@ const ProductForm = () => {
       return;
     }
 
-    if (manualSize) {
-      const size = form.size.trim().toUpperCase();
-      const match = size.match(/^(\d+)[Xx](\d+)$/);
-      if (!match) {
-        toast.error("Size must be in format like 5X8");
-        return;
-      }
+    // if (manualSize) {
+    //   const size = form.size.trim().toUpperCase();
+    //   const match = size.match(/^(\d+)[Xx](\d+)$/);
+    //   if (!match) {
+    //     toast.error("Size must be in format like 5X8");
+    //     return;
+    //   }
 
-      const [, w, h] = match;
-      const wNum = parseInt(w, 10);
-      const hNum = parseInt(h, 10);
+    //   const [, w, h] = match;
+    //   const wNum = parseInt(w, 10);
+    //   const hNum = parseInt(h, 10);
 
-      if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
-        toast.error("Width and Height must each be between 1 and 20");
-        return;
-      }
+    //   if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
+    //     toast.error("Width and Height must each be between 1 and 20");
+    //     return;
+    //   }
 
-      form.size = `${wNum}X${hNum}`;
+    //   form.size = `${wNum}X${hNum}`;
+   // }
+   if (manualSize) {
+  const size = form.size.trim().toUpperCase();
+  
+  // Numeric format (5X8)
+  const numericMatch = size.match(/^(\d+)[Xx](\d+)$/);
+  if (numericMatch) {
+    const [, w, h] = numericMatch;
+    const wNum = parseInt(w, 10);
+    const hNum = parseInt(h, 10);
+    if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
+      toast.error("Width and Height must be between 1 and 20");
+      return;
     }
+    form.size = `${wNum}X${hNum}`;
+  }
+  // Pure alphabets - no max limit
+  else if (/^[A-Z]+$/.test(size)) {
+    form.size = size;
+  }
+  else {
+    toast.error("Size must be 5X8 or letters only (S/M/L/XL)");
+    return;
+  }
+}
 
     if (manualColor && !form.color.trim()) {
       toast.error("Color is required");
@@ -794,7 +844,8 @@ const ProductForm = () => {
                           <input
                             type="text"
                             className={`form-control form-control-modern ${fieldErrors.size ? "is-invalid" : ""}`}
-                            placeholder="Enter Size (e.g., 5X8)"
+                           placeholder="Enter Size (e.g., 5X8 or S/M/L/XL)"
+
                             name="size"
                             value={form.size}
                             onChange={(e) => {
