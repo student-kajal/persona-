@@ -68,10 +68,7 @@
 //     res.status(500).json({ success: false, error: err.message });
 //   }
 // };
-const mongoose = require('mongoose');
-const SalaryEntry = require('../models/SalaryEntry');
-const Product = require('../models/Product');
-const History = require('../models/History');
+
 
 
 // exports.getSalaryReport = async (req, res) => {
@@ -268,6 +265,10 @@ const History = require('../models/History');
 //     res.status(500).json({ success: false, error: err.message });
 //   }
 // };
+const mongoose = require('mongoose');
+const SalaryEntry = require('../models/SalaryEntry');
+const Product = require('../models/Product');
+const History = require('../models/History');
 exports.getSalaryReport = async (req, res) => {
   try {
     const { from, to, worker } = req.query;
