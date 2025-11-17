@@ -41,12 +41,13 @@ exports.getArticleVariants = async (req, res) => {
 
 
 
+
 // exports.createChallan = async (req, res) => {
 //   const session = await mongoose.startSession();
 //   session.startTransaction();
 
 //   try {
-//     const { items } = req.body; // createdByName is not needed if using req.user
+//     const { items } = req.body;
 
 //     if (!items || !Array.isArray(items) || items.length === 0) {
 //       throw new Error('No items provided');
@@ -59,7 +60,6 @@ exports.getArticleVariants = async (req, res) => {
 //     if (latestChallan && latestChallan.invoiceNo) {
 //       const parts = latestChallan.invoiceNo.split('/');
 //       if (parts[1] == year.toString()) {
-//         // Fix: Use parseInt on the number part only
 //         nextNumber = (parseInt(parts[0], 10) || 0) + 1;
 //       }
 //     }
@@ -77,7 +77,7 @@ exports.getArticleVariants = async (req, res) => {
 //       throw new Error('Failed to generate unique invoice number.');
 //     }
 
-//     // 2. Loop through items, update stock, and create history
+//     // 2. Process each item
 //     for (const item of items) {
 //       const product = await Product.findOne({
 //         $expr: { $eq: [{ $toUpper: '$article' }, item.article.toUpperCase()] },
@@ -89,15 +89,38 @@ exports.getArticleVariants = async (req, res) => {
 //       if (!product) {
 //         throw new Error(`Product not found: ${item.article}-${item.size}-${item.color}`);
 //       }
-//       if (product.cartons < item.cartons) {
-//         throw new Error(`Stock insufficient for ${item.article}. Available: ${product.cartons}, Requested: ${item.cartons}`);
+
+//       // ✅ Calculate ACTUAL available stock (SalaryEntry - existing challan)
+//       const totalSalaryAgg = await SalaryEntry.aggregate([
+//         { $match: { product: product._id } },
+//         { $group: { _id: null, total: { $sum: "$cartons" } } }
+//       ]).session(session);
+//       const totalSalary = totalSalaryAgg[0]?.total || 0;
+
+//       const challanAgg = await History.aggregate([
+//         {
+//           $match: {
+//             product: product._id,
+//             action: 'CHALLAN_OUT'
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: null,
+//             totalOut: { $sum: { $abs: '$quantityChanged' } }
+//           }
+//         }
+//       ]).session(session);
+//       const existingChallanOut = challanAgg[0]?.totalOut || 0;
+
+//       const availableCartons = Math.max(0, totalSalary - existingChallanOut);
+
+//       // ✅ Stock validation
+//       if (availableCartons < item.cartons) {
+//         throw new Error(`Stock insufficient for ${item.article}. Available: ${availableCartons}, Requested: ${item.cartons}`);
 //       }
 
-//       product.cartons -= item.cartons;
-//       product.cartonsChallanedOut = (product.cartonsChallanedOut || 0) + item.cartons;
-//       await product.save({ session });
-
-//       // **FIXED: This block is now INSIDE the loop**
+//       // ✅ Create History entry ONLY (don't touch Product.cartons manually)
 //       await History.create([{
 //         product: product._id,
 //         action: 'CHALLAN_OUT',
@@ -109,9 +132,33 @@ exports.getArticleVariants = async (req, res) => {
 //         note: `Challan OUT to ${(req.body.partyName||'').toUpperCase()} (inv ${invoiceNo})`,
 //         timestamp: new Date(),
 //       }], { session });
-//     } // <-- End of for loop
 
-//     // 3. Prepare & Save Challan
+//       // ✅ RECALCULATE Product.cartons from SalaryEntry - Total Challan
+//       const newChallanAgg = await History.aggregate([
+//         {
+//           $match: {
+//             product: product._id,
+//             action: 'CHALLAN_OUT'
+//           }
+//         },
+//         {
+//           $group: {
+//             _id: null,
+//             totalOut: { $sum: { $abs: '$quantityChanged' } }
+//           }
+//         }
+//       ]).session(session);
+//       const newTotalChallanOut = newChallanAgg[0]?.totalOut || 0;
+
+//       // ✅ CRITICAL: Recalculate from scratch
+//       product.cartons = Math.max(0, totalSalary - newTotalChallanOut);
+//       product.cartonsChallanedOut = newTotalChallanOut;
+//       await product.save({ session });
+
+//       console.log(`✅ Challan OUT: ${item.article} | Salary: ${totalSalary} | Challan: ${newTotalChallanOut} | Product: ${product.cartons}`);
+//     }
+
+//     // 3. Save Challan
 //     const challanData = {
 //       ...req.body,
 //       invoiceNo,
@@ -132,7 +179,6 @@ exports.getArticleVariants = async (req, res) => {
 //   } catch (error) {
 //     await session.abortTransaction();
 //     session.endSession();
-//     // Log the actual error on the server
 //     console.error("Challan creation failed:", error);
 //     res.status(400).json({ success: false, error: error.message });
 //   }
@@ -172,7 +218,21 @@ exports.createChallan = async (req, res) => {
       throw new Error('Failed to generate unique invoice number.');
     }
 
-    // 2. Process each item
+    // ✅ 2. SAVE CHALLAN FIRST
+    const challanData = {
+      ...req.body,
+      invoiceNo,
+      items: items.map(i => ({
+        ...i,
+        article: i.article.toUpperCase(),
+        color: i.color.toUpperCase()
+      })),
+    };
+
+    const challan = new Challan(challanData);
+    const savedChallan = await challan.save({ session });
+
+    // ✅ 3. NOW PROCESS EACH ITEM (stock + history)
     for (const item of items) {
       const product = await Product.findOne({
         $expr: { $eq: [{ $toUpper: '$article' }, item.article.toUpperCase()] },
@@ -185,7 +245,7 @@ exports.createChallan = async (req, res) => {
         throw new Error(`Product not found: ${item.article}-${item.size}-${item.color}`);
       }
 
-      // ✅ Calculate ACTUAL available stock (SalaryEntry - existing challan)
+      // Calculate ACTUAL available stock (SalaryEntry - existing challan)
       const totalSalaryAgg = await SalaryEntry.aggregate([
         { $match: { product: product._id } },
         { $group: { _id: null, total: { $sum: "$cartons" } } }
@@ -210,12 +270,12 @@ exports.createChallan = async (req, res) => {
 
       const availableCartons = Math.max(0, totalSalary - existingChallanOut);
 
-      // ✅ Stock validation
+      // Stock validation
       if (availableCartons < item.cartons) {
         throw new Error(`Stock insufficient for ${item.article}. Available: ${availableCartons}, Requested: ${item.cartons}`);
       }
 
-      // ✅ Create History entry ONLY (don't touch Product.cartons manually)
+      // ✅ CREATE HISTORY ENTRY WITH challanId
       await History.create([{
         product: product._id,
         action: 'CHALLAN_OUT',
@@ -224,11 +284,12 @@ exports.createChallan = async (req, res) => {
         updatedByName: (req.user?.username || 'SYSTEM').toUpperCase(),
         partyName: (req.body.partyName || '').toUpperCase(),
         invoiceNo: invoiceNo,
+        challanId: savedChallan._id, // ✅ ADD THIS LINE
         note: `Challan OUT to ${(req.body.partyName||'').toUpperCase()} (inv ${invoiceNo})`,
         timestamp: new Date(),
       }], { session });
 
-      // ✅ RECALCULATE Product.cartons from SalaryEntry - Total Challan
+      // RECALCULATE Product.cartons from SalaryEntry - Total Challan
       const newChallanAgg = await History.aggregate([
         {
           $match: {
@@ -245,27 +306,13 @@ exports.createChallan = async (req, res) => {
       ]).session(session);
       const newTotalChallanOut = newChallanAgg[0]?.totalOut || 0;
 
-      // ✅ CRITICAL: Recalculate from scratch
+      // CRITICAL: Recalculate from scratch
       product.cartons = Math.max(0, totalSalary - newTotalChallanOut);
       product.cartonsChallanedOut = newTotalChallanOut;
       await product.save({ session });
 
       console.log(`✅ Challan OUT: ${item.article} | Salary: ${totalSalary} | Challan: ${newTotalChallanOut} | Product: ${product.cartons}`);
     }
-
-    // 3. Save Challan
-    const challanData = {
-      ...req.body,
-      invoiceNo,
-      items: items.map(i => ({
-        ...i,
-        article: i.article.toUpperCase(),
-        color: i.color.toUpperCase()
-      })),
-    };
-
-    const challan = new Challan(challanData);
-    const savedChallan = await challan.save({ session });
 
     await session.commitTransaction();
     session.endSession();
@@ -427,35 +474,6 @@ exports.checkStock = async (req, res) => {
   });
 };
 
-
-// Get available stock for UI (in cartons)
-// exports.getStockAvailable = async (req, res) => {
-//   const article = (req.query.article || '').trim().toUpperCase();
-//   const size = (req.query.size || '').trim().toUpperCase();
-//   const color = (req.query.color || '').trim().toUpperCase();
-
-//   if (!article || !size || !color) {
-//     return res.status(400).json({ error: "Missing parameters" });
-//   }
-//   try {
-//     const product = await Product.findOne({
-//       $expr: { $eq: [{ $toUpper: "$article" }, article] },
-//       size: { $regex: `^${size}$`, $options: 'i' },
-//       color: { $regex: `^${color}$`, $options: 'i' },
-//       isDeleted: false
-//     });
-
-//     if (!product) {
-//       return res.json({ availableCartons: 0 });
-//     }
-
-//     const availableCartons = product.cartons || 0;
-
-//     res.json({ availableCartons });
-//   } catch (err) {
-//     res.status(500).json({ error: "Server error" });
-//   }
-// };
 // ✅ FIXED: Calculate available stock from SalaryEntry - Challan
 exports.getStockAvailable = async (req, res) => {
   const article = (req.query.article || '').trim().toUpperCase();
@@ -664,3 +682,233 @@ exports.getPartyNames = async (req, res) => {
   }
 };
 
+// ✅ UPDATE CHALLAN (with stock revert + apply new stock)
+// ✅ UPDATE CHALLAN (with stock revert + apply new stock)
+exports.updateChallan = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params;
+    const { items: newItems, ...otherFields } = req.body;
+
+    // 1. Fetch existing challan
+    const existingChallan = await Challan.findById(id).session(session);
+    if (!existingChallan) {
+      throw new Error('Challan not found');
+    }
+
+    const oldItems = existingChallan.items;
+    const oldInvoiceNo = existingChallan.invoiceNo;
+
+    // 2. REVERT OLD STOCK (add back old quantities)
+    for (const oldItem of oldItems) {
+      const product = await Product.findOne({
+        $expr: { $eq: [{ $toUpper: '$article' }, oldItem.article.toUpperCase()] },
+        size: oldItem.size,
+        color: new RegExp(`^${oldItem.color}$`, 'i'),
+        isDeleted: false
+      }).session(session);
+
+      if (!product) {
+        throw new Error(`Product not found for revert: ${oldItem.article}-${oldItem.size}-${oldItem.color}`);
+      }
+
+      // Delete old history entry
+      await History.deleteMany({
+        product: product._id,
+        action: 'CHALLAN_OUT',
+        invoiceNo: oldInvoiceNo,
+        'quantityChanged': -oldItem.cartons
+      }).session(session);
+
+      // Recalculate from SalaryEntry - remaining Challan
+      const totalSalaryAgg = await SalaryEntry.aggregate([
+        { $match: { product: product._id } },
+        { $group: { _id: null, total: { $sum: "$cartons" } } }
+      ]).session(session);
+      const totalSalary = totalSalaryAgg[0]?.total || 0;
+
+      const challanAgg = await History.aggregate([
+        {
+          $match: {
+            product: product._id,
+            action: 'CHALLAN_OUT'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOut: { $sum: { $abs: '$quantityChanged' } }
+          }
+        }
+      ]).session(session);
+      const totalChallanOut = challanAgg[0]?.totalOut || 0;
+
+      product.cartons = Math.max(0, totalSalary - totalChallanOut);
+      product.cartonsChallanedOut = totalChallanOut;
+      await product.save({ session });
+
+      console.log(`✅ Stock reverted: ${oldItem.article} | New available: ${product.cartons}`);
+    }
+
+    // 3. APPLY NEW STOCK (deduct new quantities)
+    for (const newItem of newItems) {
+      const product = await Product.findOne({
+        $expr: { $eq: [{ $toUpper: '$article' }, newItem.article.toUpperCase()] },
+        size: newItem.size,
+        color: new RegExp(`^${newItem.color}$`, 'i'),
+        isDeleted: false
+      }).session(session);
+
+      if (!product) {
+        throw new Error(`Product not found: ${newItem.article}-${newItem.size}-${newItem.color}`);
+      }
+
+      // Check available stock
+      const totalSalaryAgg = await SalaryEntry.aggregate([
+        { $match: { product: product._id } },
+        { $group: { _id: null, total: { $sum: "$cartons" } } }
+      ]).session(session);
+      const totalSalary = totalSalaryAgg[0]?.total || 0;
+
+      const challanAgg = await History.aggregate([
+        {
+          $match: {
+            product: product._id,
+            action: 'CHALLAN_OUT'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOut: { $sum: { $abs: '$quantityChanged' } }
+          }
+        }
+      ]).session(session);
+      const existingChallanOut = challanAgg[0]?.totalOut || 0;
+      const availableCartons = Math.max(0, totalSalary - existingChallanOut);
+
+      if (availableCartons < newItem.cartons) {
+        throw new Error(`Stock insufficient for ${newItem.article}. Available: ${availableCartons}, Requested: ${newItem.cartons}`);
+      }
+
+      // ✅ Create new history entry WITH challanId
+      await History.create([{
+        product: product._id,
+        action: 'CHALLAN_OUT',
+        quantityChanged: -newItem.cartons,
+        updatedBy: req.user?._id,
+        updatedByName: (req.user?.username || 'SYSTEM').toUpperCase(),
+        partyName: (req.body.partyName || '').toUpperCase(),
+        invoiceNo: existingChallan.invoiceNo,
+        challanId: existingChallan._id, // ✅ CRITICAL: Add this line
+        note: `Challan UPDATED for ${(req.body.partyName||'').toUpperCase()} (inv ${existingChallan.invoiceNo})`,
+        timestamp: new Date(),
+      }], { session });
+
+      // Recalculate product stock
+      const newChallanAgg = await History.aggregate([
+        {
+          $match: {
+            product: product._id,
+            action: 'CHALLAN_OUT'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOut: { $sum: { $abs: '$quantityChanged' } }
+          }
+        }
+      ]).session(session);
+      const newTotalChallanOut = newChallanAgg[0]?.totalOut || 0;
+
+      product.cartons = Math.max(0, totalSalary - newTotalChallanOut);
+      product.cartonsChallanedOut = newTotalChallanOut;
+      await product.save({ session });
+
+      console.log(`✅ New stock applied: ${newItem.article} | Available: ${product.cartons}`);
+    }
+
+    // 4. Update challan document
+    existingChallan.items = newItems.map(i => ({
+      ...i,
+      article: i.article.toUpperCase(),
+      color: i.color.toUpperCase()
+    }));
+    existingChallan.partyName = (otherFields.partyName || existingChallan.partyName).toUpperCase();
+    existingChallan.station = otherFields.station || existingChallan.station;
+    existingChallan.transport = otherFields.transport || existingChallan.transport;
+    existingChallan.marka = otherFields.marka || existingChallan.marka;
+    existingChallan.date = otherFields.date || existingChallan.date;
+
+    await existingChallan.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ 
+      success: true, 
+      message: 'Challan updated successfully',
+      data: existingChallan 
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Challan update failed:", error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+// ✅ MIGRATION: Fix missing challanIds in History
+exports.migrateChallanIds = async (req, res) => {
+  try {
+    console.log('🔍 Starting challanId migration...');
+    
+    const histories = await History.find({ 
+      action: 'CHALLAN_OUT', 
+      challanId: { $exists: false } 
+    });
+    
+    console.log(`📊 Found ${histories.length} entries without challanId`);
+    
+    let fixed = 0;
+    let notFound = 0;
+    
+    for (const history of histories) {
+      const challan = await Challan.findOne({ invoiceNo: history.invoiceNo });
+      if (challan) {
+        history.challanId = challan._id;
+        await history.save();
+        fixed++;
+        console.log(`✅ Fixed: ${history.invoiceNo} → ${challan._id}`);
+      } else {
+        notFound++;
+        console.log(`⚠️  No challan for invoice: ${history.invoiceNo}`);
+      }
+    }
+    
+    console.log(`\n✅ Migration Complete!`);
+    console.log(`   Fixed: ${fixed}`);
+    console.log(`   Not Found: ${notFound}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Migration completed successfully',
+      stats: {
+        total: histories.length,
+        fixed: fixed,
+        notFound: notFound
+      }
+    });
+    
+  } catch (err) {
+    console.error('❌ Migration failed:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+};

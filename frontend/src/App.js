@@ -133,6 +133,7 @@ import SalaryReport from './pages/SalaryReport';
 import PDFGenerator from './pages/PDFGenerator';
 import ChallanForm from './pages/ChallanForm';
 import ChallanList from './pages/ChallanList';
+import EditChallan from './pages/EditChallan';
 import SalaryEntryEdit from './pages/SalaryEntryEdit'; 
 
 // ✅ CORRECTED: HistoryTable ab 'pages' folder se import hoga
@@ -183,6 +184,7 @@ function App() {
             <Route path="/history" element={<HistoryTable />} />
             <Route path="/salary-entry/edit/:id" element={<SalaryEntryEdit />} />
             <Route path="/party-summary" element={<PartySummary />} />
+            <Route path="/challan-out/edit/:id" element={<EditChallan />} />
           </Route>
         </Routes>
       </Router>

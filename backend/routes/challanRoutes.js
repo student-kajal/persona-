@@ -41,6 +41,9 @@ router.get('/', challanController.getAllChallans);
 router.get('/party-names', challanController.getPartyNames);
 // Param route LAST
 router.get('/:id', challanController.getChallan);
-router.delete('/:id', challanController.deleteChallan); // Also add delete route
+// Without auth middleware
+router.put('/:id', challanController.updateChallan); // ✅ No auth
 
+router.delete('/:id', challanController.deleteChallan); // Also add delete route
+router.post('/migrate-challan-ids', challanController.migrateChallanIds);
 module.exports = router;

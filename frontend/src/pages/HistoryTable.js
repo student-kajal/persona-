@@ -850,59 +850,80 @@ const HistoryTable = () => {
                             </div>
                           ) : (entry.note || '-')}
                         </td>
-                        <td className="operations-cell">
-                          {/* Edit Button */}
-                          {entry.action === 'ADD' || entry.action === 'UPDATE' ? (
-                            <Link
-                              to={entry.salaryEntryId ? `/salary-entry/edit/${entry.salaryEntryId}` : '#'}
-                              className={`btn btn-action btn-edit text-decoration-none ${!entry.salaryEntryId ? 'btn-disabled' : ''}`}
-                              onClick={(e) => !entry.salaryEntryId && e.preventDefault()}
-                              title={entry.salaryEntryId ? "Edit this specific entry" : "Cannot edit old entries"}
-                            >
-                              Edit
-                            </Link>
-                          ) : (
-                            <button
-                              className="btn btn-action btn-edit btn-disabled"
-                              disabled={true}
-                              title="Edit is disabled for this action type"
-                            >
-                              Edit
-                            </button>
-                          )}
+                      <td className="operations-cell">
+  {/* Edit Button */}
+  {entry.action === 'ADD' || entry.action === 'UPDATE' ? (
+    <Link
+      to={entry.salaryEntryId ? `/salary-entry/edit/${entry.salaryEntryId}` : '#'}
+      className={`btn btn-action btn-edit text-decoration-none ${!entry.salaryEntryId ? 'btn-disabled' : ''}`}
+      onClick={(e) => {
+        if (!entry.salaryEntryId) {
+          e.preventDefault();
+          toast.error('Salary entry ID missing. Cannot edit old entries.');
+        }
+      }}
+      title={entry.salaryEntryId ? "Edit this specific entry" : "Cannot edit old entries"}
+    >
+      Edit
+    </Link>
+  ) : entry.action === 'CHALLAN_OUT' ? (
+    <Link
+      to={entry.challanId ? `/challan-out/edit/${entry.challanId}` : '#'}  // ✅ NO FALLBACK
+      className={`btn btn-action btn-edit text-decoration-none ${!entry.challanId ? 'btn-disabled' : ''}`}
+      onClick={(e) => {
+        if (!entry.challanId) {
+          e.preventDefault();
+          toast.error('Challan ID missing. Please run migration or contact admin.');
+        }
+      }}
+      title={entry.challanId ? "Edit this challan" : "Challan ID missing - cannot edit"}
+    >
+      Edit
+    </Link>
+  ) : (
+    <button
+      className="btn btn-action btn-edit btn-disabled"
+      disabled={true}
+      title="Edit is disabled for this action type"
+    >
+      Edit
+    </button>
+  )}
 
-                          {/* Delete Button - ONLY enabled for CHALLAN_OUT */}
-                          <button
-                            className={`btn btn-action btn-delete ${entry.action !== 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
-                            title={
-                              entry.action !== 'CHALLAN_OUT'
-                                ? 'Delete is only allowed for CHALLAN_OUT entries'
-                                : 'Delete challan entry and revert stock'
-                            }
-                            onClick={() => {
-                              if (entry.action === 'CHALLAN_OUT') {
-                                handleDelete(entry._id);
-                              }
-                            }}
-                            disabled={entry.action !== 'CHALLAN_OUT'}
-                          >
-                            Delete
-                          </button>
+  {/* Delete Button - ONLY enabled for CHALLAN_OUT */}
+  <button
+    className={`btn btn-action btn-delete ${entry.action !== 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
+    title={
+      entry.action !== 'CHALLAN_OUT'
+        ? 'Delete is only allowed for CHALLAN_OUT entries'
+        : 'Delete challan entry and revert stock'
+    }
+    onClick={() => {
+      if (entry.action === 'CHALLAN_OUT') {
+        handleDelete(entry._id);
+      }
+    }}
+    disabled={entry.action !== 'CHALLAN_OUT'}
+  >
+    Delete
+  </button>
 
-                          {/* Permanent Delete Button */}
-                          <button
-                            className={`btn btn-action btn-permanent ${entry.action === 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
-                            disabled={entry.action === 'CHALLAN_OUT'}
-                            title={
-                              entry.action === 'CHALLAN_OUT'
-                                ? 'Permanent delete disabled for Challan OUT entries'
-                                : 'Permanently remove this entry'
-                            }
-                            onClick={() => handlePermanentDelete(entry)}
-                          >
-                            Permanent Delete
-                          </button>
-                        </td>
+  {/* Permanent Delete Button */}
+  <button
+    className={`btn btn-action btn-permanent ${entry.action === 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
+    disabled={entry.action === 'CHALLAN_OUT'}
+    title={
+      entry.action === 'CHALLAN_OUT'
+        ? 'Permanent delete disabled for Challan OUT entries'
+        : 'Permanently remove this entry'
+    }
+    onClick={() => handlePermanentDelete(entry)}
+  >
+    Permanent Delete
+  </button>
+</td>
+
+
                       </tr>
                     ))
                   )}

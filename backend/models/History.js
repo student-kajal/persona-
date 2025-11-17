@@ -15,6 +15,7 @@ const historySchema = new Schema({
   quantityChanged: { type: Number, default: 0 }, // kitne pairs me change hua (+/-)
    partyName: { type: String, trim: true, uppercase: true }, // optional, backward-safe
   invoiceNo: { type: String, trim: true }, 
+  challanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Challan' },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // user ka ObjectId
   updatedByName: { type: String }, // username (e.g. createdBy)
   timestamp: { type: Date, default: Date.now },
