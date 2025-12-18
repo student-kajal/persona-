@@ -120,6 +120,7 @@ app.use(cors({
   origin: [
     'https://dazzling-pika-056e2c.netlify.app',  // ← Your actual Netlify domain
     'https://persona-pfqu.vercel.app',           // ← Vercel domain (if needed)
+     'https://persona-3.onrender.com',
     'http://localhost:3000'                      // ← Local development
   ],
 //  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
