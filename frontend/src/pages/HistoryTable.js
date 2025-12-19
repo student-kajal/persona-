@@ -1,8 +1,13 @@
 
+
+
+
+
 // import React, { useState, useEffect, useMemo } from 'react';
 // import { Link } from 'react-router-dom';
 // import { toast } from 'react-toastify';
-// import api from '../utils/api'; // ✅ Axios instance importe
+// import api from '../utils/api'; // ✅ Axios instance imported
+
 // const HistoryTable = () => {
 //   const [history, setHistory] = useState([]);
 //   const [loading, setLoading] = useState(true);
@@ -13,20 +18,19 @@
 //   const [selectedAction, setSelectedAction] = useState('');
 //   const [selectedUpdatedBy, setSelectedUpdatedBy] = useState('');
 
-//   // Fetch history data from backend
+//   // ✅ Updated fetch function using axios instance
 //   const fetchHistory = async () => {
 //     try {
-//       const response = await api.get('/history');
-        
-      
-//       const data = await response.json();
+//       const response = await api.get('/history'); // ✅ No /api prefix needed (already in baseURL)
+//       const data = response.data;
 //       if (data.success) {
 //         setHistory(data.data);
 //       } else {
 //         setError(data.error || 'Failed to load history.');
 //       }
 //     } catch (err) {
-//       setError(err.message);
+//       console.error('Fetch history error:', err);
+//       setError(err.response?.data?.error || err.message || 'Failed to load history');
 //     } finally {
 //       setLoading(false);
 //     }
@@ -50,7 +54,6 @@
 //       const entryText = `${entry.product?.article || ''} ${entry.product?.color || ''} ${entry.product?.size || ''} ${entry.note || ''} ${(entry.updatedByName || entry.updatedBy?.username || '')}`.toLowerCase();
 
 //       const matchesSearch = entryText.includes(searchLower);
-
 //       const matchesAction = selectedAction ? entry.action === selectedAction : true;
 //       const matchesUpdatedBy = selectedUpdatedBy
 //         ? (entry.updatedByName || entry.updatedBy?.username || 'Unknown') === selectedUpdatedBy
@@ -60,67 +63,56 @@
 //     });
 //   }, [history, searchTerm, selectedAction, selectedUpdatedBy]);
 
-//   // Delete handler — soft delete with revert (your existing API)
+//   // ✅ Updated delete handler using axios
 //   const handleDelete = async (id) => {
 //     if (!window.confirm(
 //       '⚠ WARNING: Are you sure you want to delete this entry? This will revert stock changes and cannot be undone.'
 //     )) return;
+    
 //     try {
-//       const res = await fetch(`/api/history/${id}`, {
-//         method: 'DELETE',
-//         headers: { 
-//         'Content-Type': 'application/json',
-//         'x-auth-token': localStorage.getItem('token') // ✅ Manual token add
-//       }
-//       });
-//       const result = await res.json();
-//       if (result.success) {
+//       const result = await api.delete(`/history/${id}`); // ✅ Using axios instance
+//       if (result.data.success) {
 //         setHistory(prev => prev.filter(item => item._id !== id));
-//         alert('Entry deleted successfully.');
+//         toast.success('Entry deleted successfully.');
 //       } else {
-//         alert('Failed to delete: ' + (result.error || 'Unknown error'));
+//         toast.error('Failed to delete: ' + (result.data.error || 'Unknown error'));
 //       }
 //     } catch (err) {
-//       alert('Error deleting entry: ' + err.message);
+//       console.error('Delete error:', err);
+//       toast.error('Error deleting entry: ' + (err.response?.data?.error || err.message));
 //     }
 //   };
 
+//   // ✅ Updated permanent delete handler using axios
 //   const handlePermanentDelete = async (row) => {
 //     // safety: agar product ya product.article missing ho to ignore
 //     if (!row.product || !row.product.article) {
-//       alert('Permanent delete not possible: product field missing.');
+//       toast.error('Permanent delete not possible: product field missing.');
 //       return;
 //     }
 //     if (row.action === 'CHALLAN_OUT') return;  // double-safety
 
 //     if (!window.confirm(
-//           `🚨  '${row.product.article}' को पूरी तरह delete और \
-// सारी संबंधित salary 0 करनी है?`
+//           `🚨  '${row.product.article}' को पूरी तरह delete और सारी संबंधित salary 0 करनी है?`
 //         )) return;
 
 //     try {
-//       const res = await fetch('/api/history/permanent-delete-article', {
-//         method : 'POST',
-//         headers: { 
-//         'Content-Type': 'application/json',
-//         'x-auth-token': localStorage.getItem('token') // ✅ Manual token add
-//       },
-//         body   : JSON.stringify({
-//           article: row.product.article,
-//           gender : row.product.gender,   // ये फ़ील्ड मौजूद न हो तो backend ignore कर देगा
-//           size   : row.product.size,
-//           color  : row.product.color
-//         })
+//       const result = await api.post('/history/permanent-delete-article', { // ✅ Using axios instance
+//         article: row.product.article,
+//         gender : row.product.gender,   // ये फ़ील्ड मौजूद न हो तो backend ignore कर देगा
+//         size   : row.product.size,
+//         color  : row.product.color
 //       });
-//       const data = await res.json();
-//       if (data.success) {
+      
+//       if (result.data.success) {
 //         toast.success('Article deleted & salaries reset');
 //         fetchHistory();                 // तालिका रीफ़्रेश
 //       } else {
-//         toast.error(data.error || 'Permanent delete failed');
+//         toast.error(result.data.error || 'Permanent delete failed');
 //       }
 //     } catch (err) {
-//       toast.error(err.message);
+//       console.error('Permanent delete error:', err);
+//       toast.error(err.response?.data?.error || err.message || 'Permanent delete failed');
 //     }
 //   };
 
@@ -140,12 +132,18 @@
 //         <div className="alert alert-danger" role="alert">
 //           <h4 className="alert-heading">Error!</h4>
 //           <p>{error}</p>
+//           <button className="btn btn-outline-danger" onClick={() => {
+//             setError(null);
+//             setLoading(true);
+//             fetchHistory();
+//           }}>
+//             Retry
+//           </button>
 //         </div>
 //       </div>
 //     );
 //   }
-
-//   return (
+//  return (
 //     <div className="dashboard-bg min-vh-100 py-4">
 //       <style>{`
 //         .dashboard-bg {
@@ -392,59 +390,80 @@
 //                             </div>
 //                           ) : (entry.note || '-')}
 //                         </td>
-//                         <td className="operations-cell">
-//                           {/* Edit Button */}
-//                           {entry.action === 'ADD' || entry.action === 'UPDATE' ? (
-//                             <Link
-//                               to={entry.salaryEntryId ? `/salary-entry/edit/${entry.salaryEntryId}` : '#'}
-//                               className={`btn btn-action btn-edit text-decoration-none ${!entry.salaryEntryId ? 'btn-disabled' : ''}`}
-//                               onClick={(e) => !entry.salaryEntryId && e.preventDefault()}
-//                               title={entry.salaryEntryId ? "Edit this specific entry" : "Cannot edit old entries"}
-//                             >
-//                               Edit
-//                             </Link>
-//                           ) : (
-//                             <button
-//                               className="btn btn-action btn-edit btn-disabled"
-//                               disabled={true}
-//                               title="Edit is disabled for this action type"
-//                             >
-//                               Edit
-//                             </button>
-//                           )}
+//                       <td className="operations-cell">
+//   {/* Edit Button */}
+//   {entry.action === 'ADD' || entry.action === 'UPDATE' ? (
+//     <Link
+//       to={entry.salaryEntryId ? `/salary-entry/edit/${entry.salaryEntryId}` : '#'}
+//       className={`btn btn-action btn-edit text-decoration-none ${!entry.salaryEntryId ? 'btn-disabled' : ''}`}
+//       onClick={(e) => {
+//         if (!entry.salaryEntryId) {
+//           e.preventDefault();
+//           toast.error('Salary entry ID missing. Cannot edit old entries.');
+//         }
+//       }}
+//       title={entry.salaryEntryId ? "Edit this specific entry" : "Cannot edit old entries"}
+//     >
+//       Edit
+//     </Link>
+//   ) : entry.action === 'CHALLAN_OUT' ? (
+//     <Link
+//       to={entry.challanId ? `/challan-out/edit/${entry.challanId}` : '#'}  // ✅ NO FALLBACK
+//       className={`btn btn-action btn-edit text-decoration-none ${!entry.challanId ? 'btn-disabled' : ''}`}
+//       onClick={(e) => {
+//         if (!entry.challanId) {
+//           e.preventDefault();
+//           toast.error('Challan ID missing. Please run migration or contact admin.');
+//         }
+//       }}
+//       title={entry.challanId ? "Edit this challan" : "Challan ID missing - cannot edit"}
+//     >
+//       Edit
+//     </Link>
+//   ) : (
+//     <button
+//       className="btn btn-action btn-edit btn-disabled"
+//       disabled={true}
+//       title="Edit is disabled for this action type"
+//     >
+//       Edit
+//     </button>
+//   )}
 
-//                           {/* Delete Button - ONLY enabled for CHALLAN_OUT */}
-// <button
-//   className={`btn btn-action btn-delete ${entry.action !== 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
-//   title={
-//     entry.action !== 'CHALLAN_OUT'
-//       ? 'Delete is only allowed for CHALLAN_OUT entries'
-//       : 'Delete challan entry and revert stock'
-//   }
-//   onClick={() => {
-//     if (entry.action === 'CHALLAN_OUT') {
-//       handleDelete(entry._id);
+//   {/* Delete Button - ONLY enabled for CHALLAN_OUT */}
+//   <button
+//     className={`btn btn-action btn-delete ${entry.action !== 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
+//     title={
+//       entry.action !== 'CHALLAN_OUT'
+//         ? 'Delete is only allowed for CHALLAN_OUT entries'
+//         : 'Delete challan entry and revert stock'
 //     }
-//   }}
-//   disabled={entry.action !== 'CHALLAN_OUT'}
-// >
-//   Delete
-// </button>
+//     onClick={() => {
+//       if (entry.action === 'CHALLAN_OUT') {
+//         handleDelete(entry._id);
+//       }
+//     }}
+//     disabled={entry.action !== 'CHALLAN_OUT'}
+//   >
+//     Delete
+//   </button>
 
-//                           {/* Permanent Delete Button */}
-//                           <button
-//                             className={`btn btn-action btn-permanent ${entry.action === 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
-//                             disabled={entry.action === 'CHALLAN_OUT'}
-//                             title={
-//                               entry.action === 'CHALLAN_OUT'
-//                                 ? 'Permanent delete disabled for Challan OUT entries'
-//                                 : 'Permanently remove this entry'
-//                             }
-//                             onClick={() => handlePermanentDelete(entry)}
-//                           >
-//                             Permanent Delete
-//                           </button>
-//                         </td>
+//   {/* Permanent Delete Button */}
+//   <button
+//     className={`btn btn-action btn-permanent ${entry.action === 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
+//     disabled={entry.action === 'CHALLAN_OUT'}
+//     title={
+//       entry.action === 'CHALLAN_OUT'
+//         ? 'Permanent delete disabled for Challan OUT entries'
+//         : 'Permanently remove this entry'
+//     }
+//     onClick={() => handlePermanentDelete(entry)}
+//   >
+//     Permanent Delete
+//   </button>
+// </td>
+
+
 //                       </tr>
 //                     ))
 //                   )}
@@ -460,30 +479,47 @@
 
 // export default HistoryTable;
 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
-
-import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import api from '../utils/api'; // ✅ Axios instance imported
+import api from '../utils/api';
+
+const PAGE_SIZE = 50;
 
 const HistoryTable = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Filter states
+  // pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
   const [selectedUpdatedBy, setSelectedUpdatedBy] = useState('');
 
-  // ✅ Updated fetch function using axios instance
-  const fetchHistory = async () => {
+  // ---------- API with pagination ----------
+  const fetchHistory = useCallback(
+  async (targetPage = 1) => {
     try {
-      const response = await api.get('/history'); // ✅ No /api prefix needed (already in baseURL)
+      setPageLoading(true);
+
+      const response = await api.get('/history', {
+        params: { page: targetPage, limit: PAGE_SIZE },
+      });
       const data = response.data;
+
       if (data.success) {
-        setHistory(data.data);
+        setHistory(data.data || []);
+        setPage(data.page || targetPage);
+        setTotalPages(data.totalPages || 1);
+        setTotalCount(data.totalCount || (data.data ? data.data.length : 0));
+        setError(null);
       } else {
         setError(data.error || 'Failed to load history.');
       }
@@ -492,17 +528,27 @@ const HistoryTable = () => {
       setError(err.response?.data?.error || err.message || 'Failed to load history');
     } finally {
       setLoading(false);
+      setPageLoading(false);
     }
-  };
+  },
+  [] // <- koi dependency nahi
+);
 
-  useEffect(() => {
-    fetchHistory();
-  }, []);
+ useEffect(() => {
+  fetchHistory(1);
+}, [fetchHistory]);
+
 
   // Compute unique values for dropdowns
-  const uniqueActions = useMemo(() => [...new Set(history.map(entry => entry.action))].sort(), [history]);
+  const uniqueActions = useMemo(
+    () => [...new Set(history.map(entry => entry.action))].sort(),
+    [history]
+  );
   const uniqueUpdatedBy = useMemo(
-    () => [...new Set(history.map(e => (e.updatedByName || e.updatedBy?.username || 'Unknown')))].sort(),
+    () =>
+      [...new Set(
+        history.map(e => (e.updatedByName || e.updatedBy?.username || 'Unknown'))
+      )].sort(),
     [history]
   );
 
@@ -522,50 +568,57 @@ const HistoryTable = () => {
     });
   }, [history, searchTerm, selectedAction, selectedUpdatedBy]);
 
-  // ✅ Updated delete handler using axios
+  // delete
   const handleDelete = async (id) => {
-    if (!window.confirm(
-      '⚠ WARNING: Are you sure you want to delete this entry? This will revert stock changes and cannot be undone.'
-    )) return;
-    
+    if (
+      !window.confirm(
+        '⚠ WARNING: Are you sure you want to delete this entry? This will revert stock changes and cannot be undone.'
+      )
+    ) return;
+
+    const prev = history;
+    setHistory(prev.filter(item => item._id !== id));
+
     try {
-      const result = await api.delete(`/history/${id}`); // ✅ Using axios instance
+      const result = await api.delete(`/history/${id}`);
       if (result.data.success) {
-        setHistory(prev => prev.filter(item => item._id !== id));
         toast.success('Entry deleted successfully.');
       } else {
         toast.error('Failed to delete: ' + (result.data.error || 'Unknown error'));
+        setHistory(prev);
       }
     } catch (err) {
       console.error('Delete error:', err);
       toast.error('Error deleting entry: ' + (err.response?.data?.error || err.message));
+      setHistory(prev);
     }
   };
 
-  // ✅ Updated permanent delete handler using axios
+  // permanent delete
   const handlePermanentDelete = async (row) => {
-    // safety: agar product ya product.article missing ho to ignore
     if (!row.product || !row.product.article) {
       toast.error('Permanent delete not possible: product field missing.');
       return;
     }
-    if (row.action === 'CHALLAN_OUT') return;  // double-safety
+    if (row.action === 'CHALLAN_OUT') return;
 
-    if (!window.confirm(
-          `🚨  '${row.product.article}' को पूरी तरह delete और सारी संबंधित salary 0 करनी है?`
-        )) return;
+    if (
+      !window.confirm(
+        `🚨  '${row.product.article}' को पूरी तरह delete और सारी संबंधित salary 0 करनी है?`
+      )
+    ) return;
 
     try {
-      const result = await api.post('/history/permanent-delete-article', { // ✅ Using axios instance
+      const result = await api.post('/history/permanent-delete-article', {
         article: row.product.article,
-        gender : row.product.gender,   // ये फ़ील्ड मौजूद न हो तो backend ignore कर देगा
-        size   : row.product.size,
-        color  : row.product.color
+        gender: row.product.gender,
+        size: row.product.size,
+        color: row.product.color,
       });
-      
+
       if (result.data.success) {
         toast.success('Article deleted & salaries reset');
-        fetchHistory();                 // तालिका रीफ़्रेश
+        fetchHistory(page);
       } else {
         toast.error(result.data.error || 'Permanent delete failed');
       }
@@ -591,11 +644,13 @@ const HistoryTable = () => {
         <div className="alert alert-danger" role="alert">
           <h4 className="alert-heading">Error!</h4>
           <p>{error}</p>
-          <button className="btn btn-outline-danger" onClick={() => {
-            setError(null);
-            setLoading(true);
-            fetchHistory();
-          }}>
+          <button
+            className="btn btn-outline-danger"
+            onClick={() => {
+              setError(null);
+              fetchHistory(1);
+            }}
+          >
             Retry
           </button>
         </div>
@@ -789,7 +844,7 @@ const HistoryTable = () => {
             {/* Results Count */}
             <div className="mb-3">
               <small className="text-muted">
-                Showing {filteredHistory.length} of {history.length} records
+                Showing {filteredHistory.length} of {totalCount} records (page {page} / {totalPages})
               </small>
             </div>
 
@@ -833,102 +888,151 @@ const HistoryTable = () => {
                         <td>{entry.product?.color || 'N/A'}</td>
                         <td>{entry.product?.size || 'N/A'}</td>
                         <td className="text-center">
-                          <span className={`badge ${entry.quantityChanged > 0 ? 'bg-success' : entry.quantityChanged < 0 ? 'bg-danger' : 'bg-secondary'}`}>
+                          <span className={`badge ${
+                            entry.quantityChanged > 0
+                              ? 'bg-success'
+                              : entry.quantityChanged < 0
+                              ? 'bg-danger'
+                              : 'bg-secondary'
+                          }`}>
                             {entry.quantityChanged > 0 ? '+' : ''}{entry.quantityChanged}
                           </span>
                         </td>
                         <td className="text-truncate-custom">
                           {entry.updatedByName || entry.updatedBy?.username || 'Unknown'}
                         </td>
-                        <td className="small">{new Date(entry.timestamp).toLocaleString()}</td>
+                        <td className="small">
+                          {new Date(entry.timestamp).toLocaleString()}
+                        </td>
                         <td className="text-truncate-custom">
                           {entry.partyName ? (
                             <div className="small">
-                              <strong>Party:</strong> <Link to={`/party-summary?party=${encodeURIComponent(entry.partyName)}`} className="text-primary">{entry.partyName}</Link>
+                              <strong>Party:</strong>{' '}
+                              <Link
+                                to={`/party-summary?party=${encodeURIComponent(entry.partyName)}`}
+                                className="text-primary"
+                              >
+                                {entry.partyName}
+                              </Link>
                               <br />
                               <strong>Invoice:</strong> {entry.invoiceNo || '-'}
                             </div>
                           ) : (entry.note || '-')}
                         </td>
-                      <td className="operations-cell">
-  {/* Edit Button */}
-  {entry.action === 'ADD' || entry.action === 'UPDATE' ? (
-    <Link
-      to={entry.salaryEntryId ? `/salary-entry/edit/${entry.salaryEntryId}` : '#'}
-      className={`btn btn-action btn-edit text-decoration-none ${!entry.salaryEntryId ? 'btn-disabled' : ''}`}
-      onClick={(e) => {
-        if (!entry.salaryEntryId) {
-          e.preventDefault();
-          toast.error('Salary entry ID missing. Cannot edit old entries.');
-        }
-      }}
-      title={entry.salaryEntryId ? "Edit this specific entry" : "Cannot edit old entries"}
-    >
-      Edit
-    </Link>
-  ) : entry.action === 'CHALLAN_OUT' ? (
-    <Link
-      to={entry.challanId ? `/challan-out/edit/${entry.challanId}` : '#'}  // ✅ NO FALLBACK
-      className={`btn btn-action btn-edit text-decoration-none ${!entry.challanId ? 'btn-disabled' : ''}`}
-      onClick={(e) => {
-        if (!entry.challanId) {
-          e.preventDefault();
-          toast.error('Challan ID missing. Please run migration or contact admin.');
-        }
-      }}
-      title={entry.challanId ? "Edit this challan" : "Challan ID missing - cannot edit"}
-    >
-      Edit
-    </Link>
-  ) : (
-    <button
-      className="btn btn-action btn-edit btn-disabled"
-      disabled={true}
-      title="Edit is disabled for this action type"
-    >
-      Edit
-    </button>
-  )}
+                        <td className="operations-cell">
+                          {/* Edit Button */}
+                          {entry.action === 'ADD' || entry.action === 'UPDATE' ? (
+                            <Link
+                              to={entry.salaryEntryId ? `/salary-entry/edit/${entry.salaryEntryId}` : '#'}
+                              className={`btn btn-action btn-edit text-decoration-none ${
+                                !entry.salaryEntryId ? 'btn-disabled' : ''
+                              }`}
+                              onClick={(e) => {
+                                if (!entry.salaryEntryId) {
+                                  e.preventDefault();
+                                  toast.error('Salary entry ID missing. Cannot edit old entries.');
+                                }
+                              }}
+                              title={entry.salaryEntryId
+                                ? 'Edit this specific entry'
+                                : 'Cannot edit old entries'}
+                            >
+                              Edit
+                            </Link>
+                          ) : entry.action === 'CHALLAN_OUT' ? (
+                            <Link
+                              to={entry.challanId ? `/challan-out/edit/${entry.challanId}` : '#'}
+                              className={`btn btn-action btn-edit text-decoration-none ${
+                                !entry.challanId ? 'btn-disabled' : ''
+                              }`}
+                              onClick={(e) => {
+                                if (!entry.challanId) {
+                                  e.preventDefault();
+                                  toast.error(
+                                    'Challan ID missing. Please run migration or contact admin.'
+                                  );
+                                }
+                              }}
+                              title={entry.challanId
+                                ? 'Edit this challan'
+                                : 'Challan ID missing - cannot edit'}
+                            >
+                              Edit
+                            </Link>
+                          ) : (
+                            <button
+                              className="btn btn-action btn-edit btn-disabled"
+                              disabled
+                              title="Edit is disabled for this action type"
+                            >
+                              Edit
+                            </button>
+                          )}
 
-  {/* Delete Button - ONLY enabled for CHALLAN_OUT */}
-  <button
-    className={`btn btn-action btn-delete ${entry.action !== 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
-    title={
-      entry.action !== 'CHALLAN_OUT'
-        ? 'Delete is only allowed for CHALLAN_OUT entries'
-        : 'Delete challan entry and revert stock'
-    }
-    onClick={() => {
-      if (entry.action === 'CHALLAN_OUT') {
-        handleDelete(entry._id);
-      }
-    }}
-    disabled={entry.action !== 'CHALLAN_OUT'}
-  >
-    Delete
-  </button>
+                          {/* Delete Button - ONLY enabled for CHALLAN_OUT */}
+                          <button
+                            className={`btn btn-action btn-delete ${
+                              entry.action !== 'CHALLAN_OUT' ? 'btn-disabled' : ''
+                            }`}
+                            title={
+                              entry.action !== 'CHALLAN_OUT'
+                                ? 'Delete is only allowed for CHALLAN_OUT entries'
+                                : 'Delete challan entry and revert stock'
+                            }
+                            onClick={() => {
+                              if (entry.action === 'CHALLAN_OUT') {
+                                handleDelete(entry._id);
+                              }
+                            }}
+                            disabled={entry.action !== 'CHALLAN_OUT'}
+                          >
+                            Delete
+                          </button>
 
-  {/* Permanent Delete Button */}
-  <button
-    className={`btn btn-action btn-permanent ${entry.action === 'CHALLAN_OUT' ? 'btn-disabled' : ''}`}
-    disabled={entry.action === 'CHALLAN_OUT'}
-    title={
-      entry.action === 'CHALLAN_OUT'
-        ? 'Permanent delete disabled for Challan OUT entries'
-        : 'Permanently remove this entry'
-    }
-    onClick={() => handlePermanentDelete(entry)}
-  >
-    Permanent Delete
-  </button>
-</td>
-
-
+                          {/* Permanent Delete Button */}
+                          <button
+                            className={`btn btn-action btn-permanent ${
+                              entry.action === 'CHALLAN_OUT' ? 'btn-disabled' : ''
+                            }`}
+                            disabled={entry.action === 'CHALLAN_OUT'}
+                            title={
+                              entry.action === 'CHALLAN_OUT'
+                                ? 'Permanent delete disabled for Challan OUT entries'
+                                : 'Permanently remove this entry'
+                            }
+                            onClick={() => handlePermanentDelete(entry)}
+                          >
+                            Permanent Delete
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Pagination buttons */}
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <button
+                className="btn btn-outline-secondary"
+                disabled={page <= 1 || pageLoading}
+                onClick={() => fetchHistory(page - 1)}
+              >
+                ← Prev
+              </button>
+
+              <span className="text-muted small">
+                Page {page} of {totalPages}
+              </span>
+
+              <button
+                className="btn btn-outline-secondary"
+                disabled={page >= totalPages || pageLoading}
+                onClick={() => fetchHistory(page + 1)}
+              >
+                Next →
+              </button>
             </div>
           </div>
         </div>
