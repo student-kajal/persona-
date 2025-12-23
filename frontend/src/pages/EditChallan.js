@@ -1508,7 +1508,7 @@ const EditChallan = () => {
                 Add Item
               </button>
             </div>
-            <div className="card-body p-0">
+            <div className="challan-items-scroll">
               <div className="table-responsive">
                 <table className="table table-hover mb-0">
                   <thead className="table-dark">

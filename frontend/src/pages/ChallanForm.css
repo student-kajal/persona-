@@ -83,3 +83,20 @@
   background: #212529;
   color: #fff;
 }
+/* sirf EditChallan ke product items ke liye */
+.challan-wrapper .challan-items-scroll {
+  max-height: 60vh;     /* ya 420px */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.challan-wrapper .challan-items-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.challan-wrapper .challan-items-scroll::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+.challan-wrapper .challan-items-scroll::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
