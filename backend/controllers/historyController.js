@@ -7,10 +7,17 @@ const Challan = require('../models/Challan');
 
 const SalaryEntry = require('../models/SalaryEntry');
 
-// PATCH: server/controllers/historyController.js
+
+
 // exports.getHistory = async (req, res) => {
 //   try {
 //     const { productId, action, userId, from, to } = req.query;
+
+//     // ✅ NEW: pagination params (optional)
+//     const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
+//     const limit = Math.max(parseInt(req.query.limit, 10) || 50, 1);
+//     const skip  = (page - 1) * limit;
+
 //     const filter = {};
 //     if (productId) filter.product = productId;
 //     if (action) filter.action = action;
@@ -18,25 +25,43 @@ const SalaryEntry = require('../models/SalaryEntry');
 //     if (from || to) {
 //       filter.timestamp = {};
 //       if (from) filter.timestamp.$gte = new Date(from);
-//       if (to) filter.timestamp.$lte = new Date(to);
+//       if (to)   filter.timestamp.$lte = new Date(to);
 //     }
-//     let history = await History.find(filter)
-//       .populate('product', 'article gender size color')
-//       .populate('updatedBy', 'username')
-//       .sort({ timestamp: -1 })
-//       .lean(); // Now document is plain JS Object
 
-//     // PATCH: assign blank product if missing (so frontend never fails)
-//     history = history.map(h => {
+//     // ✅ Count + page data parallel
+//     const [totalCount, rawHistory] = await Promise.all([
+//       History.countDocuments(filter),
+//       History.find(filter)
+//         .populate('product', 'article gender size color')
+//         .populate('updatedBy', 'username')
+//         .sort({ timestamp: -1 })
+//         .skip(skip)
+//         .limit(limit)
+//         .lean(),
+//     ]);
+
+//     // Same PATCH logic as before
+//     const history = rawHistory.map(h => {
 //       if (!h.product) {
 //         h.product = { article: '', gender: '', size: '', color: '' };
 //       }
 //       if (!h.updatedByName && h.updatedBy && h.updatedBy.username) {
-//     h.updatedByName = h.updatedBy.username;
-//   }
+//         h.updatedByName = h.updatedBy.username;
+//       }
 //       return h;
 //     });
-//     res.json({ success: true, data: history });
+
+//     const totalPages = Math.max(Math.ceil(totalCount / limit), 1);
+
+//     // ✅ Old fields + new pagination meta
+//     res.json({
+//       success: true,
+//       data: history,
+//       totalCount,
+//       totalPages,
+//       page,
+//       limit,
+//     });
 //   } catch (err) {
 //     res.status(500).json({ success: false, error: err.message });
 //   }
@@ -44,24 +69,78 @@ const SalaryEntry = require('../models/SalaryEntry');
 
 exports.getHistory = async (req, res) => {
   try {
-    const { productId, action, userId, from, to } = req.query;
+    const {
+      page = 1,
+      limit = 50,
+      search = '',
+      action,
+      updatedBy,
+      productId,
+      userId,
+      from,
+      to,
+    } = req.query;
 
-    // ✅ NEW: pagination params (optional)
-    const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.max(parseInt(req.query.limit, 10) || 50, 1);
-    const skip  = (page - 1) * limit;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit, 10) || 50, 1);
+    const skip = (pageNum - 1) * limitNum;
 
+    // ✅ BASE FILTER
     const filter = {};
+
+    // Existing filters
     if (productId) filter.product = productId;
-    if (action) filter.action = action;
     if (userId) filter.updatedBy = userId;
     if (from || to) {
       filter.timestamp = {};
       if (from) filter.timestamp.$gte = new Date(from);
-      if (to)   filter.timestamp.$lte = new Date(to);
+      if (to) filter.timestamp.$lte = new Date(to);
     }
 
-    // ✅ Count + page data parallel
+    // ✅ Action filter
+    if (action) filter.action = action;
+
+    // ✅ GLOBAL SEARCH CONDITIONS
+    const orClauses = [];
+
+    if (search.trim()) {
+      const regex = new RegExp(search.trim(), 'i');
+
+      // 🔥 Article / color / size search via Product collection
+      const productIds = await Product.find({
+        $or: [
+          { article: regex },
+          { color: regex },
+          { size: regex },
+        ],
+      }).distinct('_id');
+
+      if (productIds.length) {
+        orClauses.push({ product: { $in: productIds } });
+      }
+
+      // Direct string fields on History
+      orClauses.push(
+        { note: regex },
+        { updatedByName: regex },
+        { partyName: regex },
+        { invoiceNo: regex }
+      );
+    }
+
+    // ✅ UpdatedBy filter (name ya username)
+    if (updatedBy) {
+      orClauses.push(
+        { updatedByName: updatedBy },
+        { 'updatedBy.username': updatedBy }
+      );
+    }
+
+    if (orClauses.length > 0) {
+      filter.$or = orClauses;
+    }
+
+    // ✅ Count + data parallel
     const [totalCount, rawHistory] = await Promise.all([
       History.countDocuments(filter),
       History.find(filter)
@@ -69,37 +148,46 @@ exports.getHistory = async (req, res) => {
         .populate('updatedBy', 'username')
         .sort({ timestamp: -1 })
         .skip(skip)
-        .limit(limit)
+        .limit(limitNum)
         .lean(),
     ]);
 
-    // Same PATCH logic as before
-    const history = rawHistory.map(h => {
+    const history = rawHistory.map((h) => {
       if (!h.product) {
-        h.product = { article: '', gender: '', size: '', color: '' };
+        h.product = {
+          article: '',
+          gender: '',
+          size: '',
+          color: '',
+        };
       }
-      if (!h.updatedByName && h.updatedBy && h.updatedBy.username) {
+      if (!h.updatedByName && h.updatedBy?.username) {
         h.updatedByName = h.updatedBy.username;
       }
       return h;
     });
 
-    const totalPages = Math.max(Math.ceil(totalCount / limit), 1);
+    const totalPages = Math.max(
+      Math.ceil(totalCount / limitNum),
+      1
+    );
 
-    // ✅ Old fields + new pagination meta
     res.json({
       success: true,
       data: history,
       totalCount,
       totalPages,
-      page,
-      limit,
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('History fetch error:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
   }
 };
-
 
 exports.deleteHistoryEntry = async (req, res) => {
   const session = await mongoose.startSession();
@@ -325,147 +413,48 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
   }
 };
 
-// exports.recoverProductsFromHistory = async (req, res) => {
-//   try {
-//     console.log("🔄 Starting recovery from History...\n");
-    
-//     const products = await Product.find({});
-//     let recovered = 0;
-//     let failed = 0;
-    
-//     for (const product of products) {
-//       try {
-//         // Get history data
-//         const salaryAdditions = await History.find({
-//           product: product._id,
-//           action: { $in: ['ADD', 'UPDATE'] }
-//         });
-        
-//         const totalSalaryCartons = salaryAdditions.reduce((sum, h) => {
-//           return sum + (h.quantityChanged || 0);
-//         }, 0);
-        
-//         const challanOuts = await History.find({
-//           product: product._id,
-//           action: 'CHALLAN_OUT'
-//         });
-        
-//         const totalChallanOut = challanOuts.reduce((sum, h) => {
-//           return sum + Math.abs(h.quantityChanged || 0);
-//         }, 0);
-        
-//         const challanIns = await History.find({
-//           product: product._id,
-//           action: 'CHALLAN_IN'
-//         });
-        
-//         const totalChallanIn = challanIns.reduce((sum, h) => {
-//           return sum + Math.abs(h.quantityChanged || 0);
-//         }, 0);
-        
-//         const correctCartons = Math.max(0, totalSalaryCartons - totalChallanOut + totalChallanIn);
-        
-//         // Rebuild SalaryEntry
-//         await SalaryEntry.deleteMany({ product: product._id });
-        
-//         const userMap = new Map();
-//         salaryAdditions.forEach(h => {
-//           const user = h.updatedByName || 'UNKNOWN';
-//           const current = userMap.get(user) || 0;
-//           userMap.set(user, current + (h.quantityChanged || 0));
-//         });
-        
-//         for (const [user, cartons] of userMap) {
-//           if (cartons > 0) {
-//             await SalaryEntry.create({
-//               createdBy: user,
-//               article: product.article,
-//               gender: product.gender,
-//               cartons: cartons,
-//               pairPerCarton: product.pairPerCarton,
-//               totalPairs: cartons * product.pairPerCarton,
-//               product: product._id
-//             });
-//           }
-//         }
-        
-//         // Update product
-//         const oldCartons = product.cartons;
-//         product.cartons = correctCartons;
-//         product.isDeleted = false;
-//         await product.save();
-        
-//         if (oldCartons !== correctCartons) {
-//           console.log(`✅ ${product.article} (${product.size}x${product.color}): ${oldCartons} → ${correctCartons}`);
-//           recovered++;
-//         }
-        
-//       } catch (err) {
-//         console.error(`❌ Failed: ${product.article}:`, err.message);
-//         failed++;
-//       }
-//     }
-    
-//     console.log(`\n✅ RECOVERY COMPLETE:`);
-//     console.log(`   - Products recovered: ${recovered}`);
-//     console.log(`   - Failed: ${failed}`);
-//     console.log(`   - Total processed: ${products.length}`);
-    
-//     res.json({
-//       success: true,
-//       message: `Recovery completed: ${recovered} products restored`,
-//       recovered,
-//       failed,
-//       total: products.length
-//     });
-    
-//   } catch (err) {
-//     console.error('❌ Recovery error:', err);
-//     res.status(500).json({
-//       success: false,
-//       error: err.message
-//     });
-//   }
-// };
+// GET /history/page-of-article?article=8815&limit=50
+exports.getPageOfArticle = async (req, res) => {
+  try {
+    const { article, limit = 50 } = req.query;
+    if (!article) {
+      return res.status(400).json({ success: false, error: 'article required' });
+    }
 
-// exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
-//   try {
-//     const { article, gender, size, color } = req.body;
-    
-//     if (!article) return res.status(400).json({ success: false, error: 'article required' });
+    const limitNum = Math.max(parseInt(limit, 10) || 50, 1);
 
-//     // 1. Product query (include size/color for product delete)
-//     const productQuery = { article: new RegExp(`^${article}$`, 'i') };
-//     if (gender) productQuery.gender = new RegExp(`^${gender}$`, 'i');
-//     if (size)   productQuery.size   = size;
-//     if (color)  productQuery.color  = new RegExp(`^${color}$`, 'i');
+    // 1) Same base filter as list (without search)
+    const baseFilter = {}; // agar action/from/to/userId lagana ho to yahin add kar
 
-//     const products   = await Product.find(productQuery);
-//     const productIds = products.map(p => p._id);
+    // 2) Target record (latest history for this article)
+    const target = await History.findOne({
+      ...baseFilter,
+      articleText: new RegExp(`^${article}$`, 'i'),  // ya exact match field
+    })
+      .sort({ timestamp: -1 })   // same sort as main listing
+      .lean();
 
-//     await Product.deleteMany({ _id: { $in: productIds } });
-//     await History.deleteMany({ product: { $in: productIds } });
+    if (!target) {
+      return res.json({ success: false, message: 'No history for this article' });
+    }
 
-//     // 2. Salary reset query (NO size/color, only article+gender as per schema)
-//     const salaryQuery = { article: new RegExp(`^${article}$`, 'i') };
-//     if (gender) salaryQuery.gender = new RegExp(`^${gender}$`, 'i');
+    // 3) Count records BEFORE this one in same sort
+    const countBefore = await History.countDocuments({
+      ...baseFilter,
+      timestamp: { $gt: target.timestamp },
+    });
 
-//     // Debug print
-//     const matches = await SalaryEntry.find(salaryQuery);
-//     console.log('Salaries matched:', matches.length, salaryQuery);
+    const page = Math.floor(countBefore / limitNum) + 1;
+    const indexInPage = countBefore % limitNum;
 
-//     const result = await SalaryEntry.updateMany(
-//       salaryQuery,
-//       { $set: { cartons: 0, totalPairs: 0 } }
-//     );
-//     console.log('Salary reset result:', result);
-
-//     res.json({ 
-//       success: true, 
-//       message: `✅ Deleted ${productIds.length} product(s); zeroed ${result.modifiedCount} salary entrie(s).`
-//     });
-//   } catch (err) {
-//     console.error('Permanent delete error:', err);
-//     res.status(500).json({ success: false, error: err.message });
-//   }
-// };
+    res.json({
+      success: true,
+      page,
+      indexInPage,
+      historyId: target._id,
+    });
+  } catch (err) {
+    console.error('getPageOfArticle error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

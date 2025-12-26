@@ -18,6 +18,7 @@ const historySchema = new Schema({
   challanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Challan' },
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // user ka ObjectId
   updatedByName: { type: String }, // username (e.g. createdBy)
+   articleText: { type: String, index: true },
   timestamp: { type: Date, default: Date.now },
   
   note: { type: String }

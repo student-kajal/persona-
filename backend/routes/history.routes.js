@@ -17,6 +17,10 @@ router.get('/', historyController.getHistory);
 //router.post('/permanent-delete', historyController.permanentDeleteAndProduct);
 //router.get('/party-summary', historyController.getPartySummary);
 // Delete history entry and revert stock
+router.get(
+  '/page-of-article',
+  historyController.getPageOfArticle
+);
 router.delete('/:id', historyController.deleteHistoryEntry);
 router.post('/permanent-delete-article', historyController.permanentDeleteArticleAndResetSalaries);
 

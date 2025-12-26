@@ -484,6 +484,7 @@ exports.updateProduct = async (req, res) => {
         quantityChanged: userChange,
         updatedBy: req.user?.id,
         updatedByName: targetUser,
+         articleText: product.article, 
         note: `${targetUser} updated cartons from ${oldUserSalaryCartons} to ${newUserCartons}`,
         timestamp: new Date()
       });
@@ -575,6 +576,7 @@ exports.createProduct = async (req, res) => {
         salaryEntryId: existingUserEntry._id,
         quantityChanged: cartonsToAdd,
         updatedByName: productData.createdBy,
+         articleText: product.article, 
         note: `${productData.createdBy} added ${cartonsToAdd} cartons to existing product`,
         timestamp: new Date(),
       });
@@ -600,6 +602,7 @@ exports.createProduct = async (req, res) => {
         salaryEntryId: newSalaryEntry._id,
         quantityChanged: cartonsToAdd,
         updatedByName: productData.createdBy,
+         articleText: product.article, 
         note: isNewProduct ? 'New product created' : 'Added cartons to existing product',
         timestamp: new Date(),
       });
@@ -781,6 +784,8 @@ exports.bulkDelete = async (req, res) => {
         quantityChanged: -(product.cartons * product.pairPerCarton),
         updatedBy: req.user?.id,
         updatedByName,
+        articleText: product.article,
+
         note: 'Bulk delete',
         timestamp: new Date()
       });
@@ -816,6 +821,8 @@ exports.bulkRestore = async (req, res) => {
         quantityChanged: product.cartons * product.pairPerCarton,
         updatedBy: req.user?.id,
         updatedByName,
+         articleText: product.article,
+
         note: 'Bulk restore',
         timestamp: new Date()
       });
@@ -889,6 +896,7 @@ exports.importExcel = [
               quantityChanged: updatedProduct.cartons * updatedProduct.pairPerCarton,
               updatedBy: req.user?.id,
               updatedByName: productData.createdBy,
+               articleText: updatedProduct.article, 
               note: 'Imported via Excel',
               timestamp: new Date()
             });
