@@ -15,13 +15,32 @@
 // });
 
 // export default api;
+// import axios from 'axios';
+
+// const api = axios.create({
+//   baseURL:
+//     process.env.NODE_ENV === 'development'
+//       ? 'http://localhost:5000/api'
+//       : process.env.REACT_APP_API_BASE_URL   // /api already laga hua hai!
+// });
+
+// api.interceptors.request.use(config => {
+//   const token = localStorage.getItem('token');
+//   if (token) {
+//     config.headers['x-auth-token'] = token;
+//   }
+//   return config;
+// });
+
+// export default api;
 import axios from 'axios';
 
 const api = axios.create({
   baseURL:
     process.env.NODE_ENV === 'development'
       ? 'http://localhost:5000/api'
-      : process.env.REACT_APP_API_BASE_URL   // /api already laga hua hai!
+      : process.env.REACT_APP_API_BASE_URL,  // Hostinger full URL yahan aayega
+  timeout: 8000,  // ✅ 8 sec timeout added - sab calls pe apply
 });
 
 api.interceptors.request.use(config => {
@@ -31,5 +50,20 @@ api.interceptors.request.use(config => {
   }
   return config;
 });
+
+// ✅ Response interceptor - timeout pe gracefully handle
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.code === 'ECONNABORTED') {
+      console.log('API timeout - using fallback data');
+      // Dashboard fallback automatic ho jayega
+    } else if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

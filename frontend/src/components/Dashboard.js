@@ -12,24 +12,53 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await api.get('/products');
-        const products = res.data.data || [];
-        setStats({
-          totalProducts: products.length,
-          totalStock: products.reduce((sum, p) => sum + (p.cartons * p.pairPerCarton), 0),
-          deletedProducts: products.filter(p => p.isDeleted).length
-        });
-      } catch {
-        setStats({ totalProducts: 0, totalStock: 0, deletedProducts: 0 });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, []);
+  // useEffect(() => {
+  //   const fetchStats = async () => {
+  //     try {
+  //       const res = await api.get('/products');
+  //       const products = res.data.data || [];
+  //       setStats({
+  //         totalProducts: products.length,
+  //         totalStock: products.reduce((sum, p) => sum + (p.cartons * p.pairPerCarton), 0),
+  //         deletedProducts: products.filter(p => p.isDeleted).length
+  //       });
+  //     } catch {
+  //       setStats({ totalProducts: 0, totalStock: 0, deletedProducts: 0 });
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
+  //   fetchStats();
+  // }, []);
+useEffect(() => {
+  const fetchStats = async () => {
+    try {
+      // Timeout controller add karo
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 sec max wait
+      
+      const res = await api.get('/products', {
+        signal: controller.signal  // Pass signal to api
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const products = res.data.data || [];
+      setStats({
+        totalProducts: products.length,
+        totalStock: products.reduce((sum, p) => sum + (p.cartons * p.pairPerCarton || 0), 0),
+        deletedProducts: products.filter(p => p.isDeleted).length
+      });
+    } catch (error) {
+      console.log('Dashboard API timeout/slow:', error.message);
+      // Fallback: empty stats ya cached dikhao - UI block nahi hogi
+      setStats({ totalProducts: 0, totalStock: 0, deletedProducts: 0 });
+    } finally {
+      setLoading(false);  // Hamesha loading false karo
+    }
+  };
+  fetchStats();
+}, []);
 
   const styles = {
     dashboardContainer: {
