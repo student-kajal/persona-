@@ -9,63 +9,6 @@ const SalaryEntry = require('../models/SalaryEntry');
 
 
 
-// exports.getHistory = async (req, res) => {
-//   try {
-//     const { productId, action, userId, from, to } = req.query;
-
-//     // ✅ NEW: pagination params (optional)
-//     const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
-//     const limit = Math.max(parseInt(req.query.limit, 10) || 50, 1);
-//     const skip  = (page - 1) * limit;
-
-//     const filter = {};
-//     if (productId) filter.product = productId;
-//     if (action) filter.action = action;
-//     if (userId) filter.updatedBy = userId;
-//     if (from || to) {
-//       filter.timestamp = {};
-//       if (from) filter.timestamp.$gte = new Date(from);
-//       if (to)   filter.timestamp.$lte = new Date(to);
-//     }
-
-//     // ✅ Count + page data parallel
-//     const [totalCount, rawHistory] = await Promise.all([
-//       History.countDocuments(filter),
-//       History.find(filter)
-//         .populate('product', 'article gender size color')
-//         .populate('updatedBy', 'username')
-//         .sort({ timestamp: -1 })
-//         .skip(skip)
-//         .limit(limit)
-//         .lean(),
-//     ]);
-
-//     // Same PATCH logic as before
-//     const history = rawHistory.map(h => {
-//       if (!h.product) {
-//         h.product = { article: '', gender: '', size: '', color: '' };
-//       }
-//       if (!h.updatedByName && h.updatedBy && h.updatedBy.username) {
-//         h.updatedByName = h.updatedBy.username;
-//       }
-//       return h;
-//     });
-
-//     const totalPages = Math.max(Math.ceil(totalCount / limit), 1);
-
-//     // ✅ Old fields + new pagination meta
-//     res.json({
-//       success: true,
-//       data: history,
-//       totalCount,
-//       totalPages,
-//       page,
-//       limit,
-//     });
-//   } catch (err) {
-//     res.status(500).json({ success: false, error: err.message });
-//   }
-// };
 
 exports.getHistory = async (req, res) => {
   try {

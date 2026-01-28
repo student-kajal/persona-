@@ -1098,9 +1098,14 @@ const ProductForm = () => {
   const debouncedArticle = useDebounce(form.article, 400);
 
   const [showArticleSuggestions, setShowArticleSuggestions] = useState(true);
+  // 🚀 NEW STATE - YAHAN ADD KARO (line 74 ke baad)
+const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
-  // ---- Article Suggestions autocomplete
-  useEffect(() => {
+
+ 
+
+// ---- Article Suggestions autocomplete - FIXED
+useEffect(() => {
   if (debouncedArticle.trim()) {
     api
       .get(`/products/articles-suggestions?search=${debouncedArticle.trim()}`)
@@ -1108,9 +1113,10 @@ const ProductForm = () => {
         let seen = new Set();
         let arr = (res.data.data || []).filter(a => {
           const upper = a.toUpperCase();
-          if (upper === debouncedArticle.toUpperCase()) return false;
+          // ✅ FIXED: Exact match BHI include karo, sirf duplicates hatao
           if (seen.has(upper)) return false;
-          seen.add(upper); return true;
+          seen.add(upper); 
+          return true;  // ✅ Exact "8815" bhi dikhega
         });
         setArticleSuggestions(arr);
       })
@@ -1120,7 +1126,6 @@ const ProductForm = () => {
   }
   setShowArticleSuggestions(true);
 }, [debouncedArticle]);
-
 
   // ---- Image preview
   useEffect(() => {
@@ -1253,6 +1258,11 @@ const ProductForm = () => {
         });
     }
   }, [form.article, form.gender, form.size]);
+  // 🚀 NEW useEffect - YAHAN ADD KARO (line ~170 ke around)
+useEffect(() => {
+  setSelectedSuggestionIndex(-1);
+}, [debouncedArticle]);
+
 
   // -- All Validation
   const checkFieldValid = (name, value) => {
@@ -1412,111 +1422,198 @@ const ProductForm = () => {
 const [submitting, setSubmitting] = useState(false);
 
   // -- Form submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (submitting) return;            // ✅ double-click guard
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     if (submitting) return;            // ✅ double-click guard
+//   setSubmitting(true);
+
+//     if (Object.entries(fieldErrors).some(([key, val]) => val && form[key] !== "")) {
+//       toast.error("Fix field errors before submitting!");
+//       return;
+//     }
+
+//     if (!form.size) {
+//       toast.error("Size is required");
+//       return;
+//     }
+//     if (!form.cartons) {
+//       toast.error("Cartons is required");
+//       return;
+//     }
+//     if (!form.pairPerCarton) {
+//       toast.error("Pair/Carton is required");
+//       return;
+//     }
+
+    
+//    if (manualSize) {
+//   const size = form.size.trim().toUpperCase();
+  
+//   // Numeric format (5X8)
+//   const numericMatch = size.match(/^(\d+)[Xx](\d+)$/);
+//   if (numericMatch) {
+//     const [, w, h] = numericMatch;
+//     const wNum = parseInt(w, 10);
+//     const hNum = parseInt(h, 10);
+//     if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
+//       toast.error("Width and Height must be between 1 and 20");
+//       return;
+//     }
+//     form.size = `${wNum}X${hNum}`;
+//   }
+//   // Pure alphabets - no max limit
+//   else if (/^[A-Z]+$/.test(size)) {
+//     form.size = size;
+//   }
+//   else {
+//     toast.error("Size must be 5X8 or letters only (S/M/L/XL)");
+//     return;
+//   }
+// }
+
+//     if (manualColor && !form.color.trim()) {
+//       toast.error("Color is required");
+//       return;
+//     }
+
+//     if (
+//       isNaN(form.cartons) ||
+//       isNaN(form.pairPerCarton) ||
+//       parseInt(form.cartons, 10) <= 0 ||
+//       parseInt(form.pairPerCarton, 10) <= 0
+//     ) {
+//       toast.error("Cartons and Pair/Carton must be positive integers");
+//       return;
+//     }
+
+//     const fd = new FormData();
+//     Object.entries(form).forEach(([k, v]) => {
+//       if (k === 'image' && !v) return;
+//       fd.append(k, v);
+//     });
+
+//     try {
+//       await api.post('/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+//       toast.success('Product added!');
+//       setForm(initialForm);
+//       setManualSize(false);
+//       setManualColor(false);
+//       setImagePreview(null);
+//       articleRef.current?.focus();
+//       if (fileInputRef.current) {
+//         fileInputRef.current.value = "";
+//       }
+//     } catch {
+//       toast.error('Failed to add product');
+//     }finally {
+//     setSubmitting(false);           // ✅ re-enable after response
+//   }
+//   };
+// -- Form submit (FULLY FIXED VERSION)
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (submitting) return;
   setSubmitting(true);
 
-    if (Object.entries(fieldErrors).some(([key, val]) => val && form[key] !== "")) {
-      toast.error("Fix field errors before submitting!");
-      return;
-    }
-
-    if (!form.size) {
-      toast.error("Size is required");
-      return;
-    }
-    if (!form.cartons) {
-      toast.error("Cartons is required");
-      return;
-    }
-    if (!form.pairPerCarton) {
-      toast.error("Pair/Carton is required");
-      return;
-    }
-
-    // if (manualSize) {
-    //   const size = form.size.trim().toUpperCase();
-    //   const match = size.match(/^(\d+)[Xx](\d+)$/);
-    //   if (!match) {
-    //     toast.error("Size must be in format like 5X8");
-    //     return;
-    //   }
-
-    //   const [, w, h] = match;
-    //   const wNum = parseInt(w, 10);
-    //   const hNum = parseInt(h, 10);
-
-    //   if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
-    //     toast.error("Width and Height must each be between 1 and 20");
-    //     return;
-    //   }
-
-    //   form.size = `${wNum}X${hNum}`;
-   // }
-   if (manualSize) {
-  const size = form.size.trim().toUpperCase();
-  
-  // Numeric format (5X8)
-  const numericMatch = size.match(/^(\d+)[Xx](\d+)$/);
-  if (numericMatch) {
-    const [, w, h] = numericMatch;
-    const wNum = parseInt(w, 10);
-    const hNum = parseInt(h, 10);
-    if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
-      toast.error("Width and Height must be between 1 and 20");
-      return;
-    }
-    form.size = `${wNum}X${hNum}`;
-  }
-  // Pure alphabets - no max limit
-  else if (/^[A-Z]+$/.test(size)) {
-    form.size = size;
-  }
-  else {
-    toast.error("Size must be 5X8 or letters only (S/M/L/XL)");
+  if (Object.entries(fieldErrors).some(([key, val]) => val && form[key] !== "")) {
+    toast.error("Fix field errors before submitting!");
+    setSubmitting(false);
     return;
   }
-}
 
-    if (manualColor && !form.color.trim()) {
-      toast.error("Color is required");
-      return;
-    }
-
-    if (
-      isNaN(form.cartons) ||
-      isNaN(form.pairPerCarton) ||
-      parseInt(form.cartons, 10) <= 0 ||
-      parseInt(form.pairPerCarton, 10) <= 0
-    ) {
-      toast.error("Cartons and Pair/Carton must be positive integers");
-      return;
-    }
-
-    const fd = new FormData();
-    Object.entries(form).forEach(([k, v]) => {
-      if (k === 'image' && !v) return;
-      fd.append(k, v);
-    });
-
-    try {
-      await api.post('/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      toast.success('Product added!');
-      setForm(initialForm);
-      setManualSize(false);
-      setManualColor(false);
-      setImagePreview(null);
-      articleRef.current?.focus();
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } catch {
-      toast.error('Failed to add product');
-    }finally {
-    setSubmitting(false);           // ✅ re-enable after response
+  if (!form.size) {
+    toast.error("Size is required");
+    setSubmitting(false);
+    return;
   }
-  };
+  if (!form.cartons) {
+    toast.error("Cartons is required");
+    setSubmitting(false);
+    return;
+  }
+  if (!form.pairPerCarton) {
+    toast.error("Pair/Carton is required");
+    setSubmitting(false);
+    return;
+  }
+
+  // Size validation (tumhara code same)
+  if (manualSize) {
+    const size = form.size.trim().toUpperCase();
+    const numericMatch = size.match(/^(\d+)[Xx](\d+)$/);
+    if (numericMatch) {
+      const [, w, h] = numericMatch;
+      const wNum = parseInt(w, 10);
+      const hNum = parseInt(h, 10);
+      if (wNum < 1 || wNum > 20 || hNum < 1 || hNum > 20) {
+        toast.error("Width and Height must be between 1 and 20");
+        setSubmitting(false);
+        return;
+      }
+      form.size = `${wNum}X${hNum}`;
+    } else if (/^[A-Z]+$/.test(size)) {
+      form.size = size;
+    } else {
+      toast.error("Size must be 5X8 or letters only (S/M/L/XL)");
+      setSubmitting(false);
+      return;
+    }
+  }
+
+  if (manualColor && !form.color.trim()) {
+    toast.error("Color is required");
+    setSubmitting(false);
+    return;
+  }
+
+  if (
+    isNaN(form.cartons) ||
+    isNaN(form.pairPerCarton) ||
+    parseInt(form.cartons, 10) <= 0 ||
+    parseInt(form.pairPerCarton, 10) <= 0
+  ) {
+    toast.error("Cartons and Pair/Carton must be positive integers");
+    setSubmitting(false);
+    return;
+  }
+
+  const fd = new FormData();
+  Object.entries(form).forEach(([k, v]) => {
+    if (k === 'image' && !v) return;
+    fd.append(k, v);
+  });
+
+  // ✅ DEBUG LOGS
+  console.log('🚀 SUBMITTING FormData:');
+  for (let [key, value] of fd.entries()) {
+    console.log(`${key}:`, value);
+  }
+
+  try {
+    const response = await api.post('/products', fd, { 
+      headers: { 'Content-Type': 'multipart/form-data' } 
+    });
+    console.log('✅ SUCCESS:', response.data);
+    
+    toast.success('Product added!');
+    setForm(initialForm);
+    setManualSize(false);
+    setManualColor(false);
+    setImagePreview(null);
+    articleRef.current?.focus();
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  } catch (error) {
+    console.error('❌ FULL ERROR:', error);
+    console.error('Response:', error.response?.data);
+    console.error('Status:', error.response?.status);
+    toast.error(`Failed: ${error.response?.data?.error || error.message}`);
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   return (
     <div className="dashboard-bg min-vh-100 py-4">
@@ -1751,6 +1848,12 @@ const [submitting, setSubmitting] = useState(false);
           margin-bottom: 1.5rem;
         }
         
+        /* 🚀 NEW CSS - YAHAN ADD KARO (style tag ke last mein) */
+.autocomplete-item.selected {
+  background: #f0f8ff !important;
+  color: #1e40af !important;
+}
+
         @media (max-width: 768px) {
           .product-form-card { margin: 1rem; }
           .form-header { padding: 1.5rem; }
@@ -1784,28 +1887,51 @@ const [submitting, setSubmitting] = useState(false);
                         Article Name<span className="required-asterisk">*</span>
                       </label>
                       <input
-                        type="text"
-                        className="form-control form-control-modern"
-                        name="article"
-                        value={form.article}
-                        onChange={handleChange}
-                        autoComplete="off"
-                        ref={articleRef}
-                        required
-                        placeholder="Enter article name..."
-                        onFocus={() => setShowArticleSuggestions(true)}
-                      />
+  type="text"
+  className="form-control form-control-modern"
+  name="article"
+  value={form.article}
+  onChange={handleChange}
+  autoComplete="off"
+  ref={articleRef}
+  required
+  placeholder="Enter article name..."
+  onFocus={() => setShowArticleSuggestions(true)}
+  onKeyDown={(e) => {
+    if (!articleSuggestions.length) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIndex((prev) => 
+        prev < articleSuggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIndex((prev) => 
+        prev > 0 ? prev - 1 : 0
+      );
+    } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+      e.preventDefault();
+      handleArticleChoose(articleSuggestions[selectedSuggestionIndex]);
+    } else if (e.key === 'Enter') {
+      handleSubmit(e); // Normal form submit if no selection
+    }
+  }}
+/>
+
                       {!!articleSuggestions.length && showArticleSuggestions && (
                         <div className="autocomplete-dropdown">
-                          {articleSuggestions.map(opt => (
-                            <div
-                              key={opt}
-                              onMouseDown={() => handleArticleChoose(opt)}
-                              className="autocomplete-item"
-                            >
-                              {opt}
-                            </div>
-                          ))}
+                         {articleSuggestions.map((opt, index) => (
+  <div
+    key={opt}
+    onMouseDown={() => handleArticleChoose(opt)}
+    className={`autocomplete-item ${index === selectedSuggestionIndex ? 'selected' : ''}`}
+    style={index === selectedSuggestionIndex ? { background: '#f0f8ff', color: '#1e40af' } : {}}
+  >
+    {opt}
+  </div>
+))}
+
                         </div>
                       )}
                     </div>
