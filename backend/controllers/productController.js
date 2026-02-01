@@ -376,7 +376,9 @@ exports.getProductById = async (req, res) => {
     const totalChallanOut = challanAgg[0]?.totalOut || 0;
 
     // ✅ 4. Product.cartons = Total Salary - Challan
-    const totalAvailableCartons = Math.max(0, totalSalary - totalChallanOut);
+   // const totalAvailableCartons = Math.max(0, totalSalary - totalChallanOut);
+   const totalAvailableCartons = totalSalary - totalChallanOut;
+
 
     // ✅ 5. Find original creator
     const firstHistory = await History.findOne({
@@ -469,7 +471,9 @@ exports.updateProduct = async (req, res) => {
     ]);
     const totalChallanOut = challanAgg[0]?.totalOut || 0;
 
-    product.cartons = Math.max(0, totalSalary - totalChallanOut);
+  //  product.cartons = Math.max(0, totalSalary - totalChallanOut);
+  product.cartons = totalSalary - totalChallanOut;
+
     await product.save();
 
     console.log(`📦 Product.cartons: ${totalSalary} (salary) - ${totalChallanOut} (challan) = ${product.cartons}`);
@@ -641,7 +645,9 @@ exports.createProduct = async (req, res) => {
     const totalChallanOut = challanReductions[0]?.totalOut || 0;
     
     // ✅ FIX 3: Use finalSalaryTotal
-    product.cartons = Math.max(0, finalSalaryTotal - totalChallanOut);
+   // product.cartons = Math.max(0, finalSalaryTotal - totalChallanOut);
+   product.cartons = finalSalaryTotal - totalChallanOut;
+
     await product.save();
 
     console.log(`✅ FINAL: SalaryEntry Total=${finalSalaryTotal}, Challan Out=${totalChallanOut}, Product Total=${product.cartons}`);
@@ -732,10 +738,16 @@ exports.getProducts = async (req, res) => {
       const totalSalary = salaryMap.get(productIdStr) || 0;
       const totalChallan = challanMap.get(productIdStr) || 0;
       
+      // return {
+      //   ...product,
+      //   cartons: Math.max(0, totalSalary - totalChallan)
+      // };
       return {
-        ...product,
-        cartons: Math.max(0, totalSalary - totalChallan)
-      };
+  ...product,
+  cartons: totalSalary - totalChallan,
+  warning: (totalSalary - totalChallan) < 0   // 👈 optional but recommended
+};
+
     });
 
     // ✅ Apply carton filters AFTER recalculation

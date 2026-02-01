@@ -869,7 +869,7 @@ import {
   FaSpinner,
   FaFilePdf,
   FaImages,
-  FaExclamationTriangle,
+ // FaExclamationTriangle,
 } from 'react-icons/fa';
 import { createPortal } from 'react-dom';
 import api from '../utils/api';
@@ -977,6 +977,39 @@ const EditChallan = () => {
 
     fetchChallan();
   }, [id, navigate]);
+// ⌨️ Keyboard Shortcuts (Update + Products PDF)
+useEffect(() => {
+  const handleShortcutKeys = (e) => {
+    // CTRL + S → Update Challan
+    if (e.ctrlKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+
+      if (saving) return;
+
+      const form = document.querySelector('form');
+      if (form) {
+        form.requestSubmit();
+      }
+
+      toast.info('💾 Challan update ho raha hai (Ctrl + S)', {
+        position: 'top-center',
+        autoClose: 1500
+      });
+    }
+
+    // CTRL + P → Download Products PDF
+    if (e.ctrlKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+
+      if (downloadingProductsPDF) return;
+
+      downloadProductsPDF(id, formData.invoiceNo);
+    }
+  };
+
+  document.addEventListener('keydown', handleShortcutKeys);
+  return () => document.removeEventListener('keydown', handleShortcutKeys);
+}, [saving, downloadingProductsPDF, id, formData.invoiceNo]);
 
   const debounce = (func, delay) => {
     let t;
@@ -1026,67 +1059,120 @@ const EditChallan = () => {
           color: color.trim().toUpperCase(),
         },
       });
+      // setStockAvailability((p) => ({
+      //   ...p,
+      //   [index]: res.data.availableCartons || 0,
+      // }));
       setStockAvailability((p) => ({
-        ...p,
-        [index]: res.data.availableCartons || 0,
-      }));
+  ...p,
+  [index]: res.data.availableCartons,
+}));
+
+if (res.data.warning) {
+  toast.warning(res.data.warningMessage, {
+    position: 'top-center',
+    autoClose: 2500,
+  });
+}
+
     } catch {
-      setStockAvailability((p) => ({ ...p, [index]: 0 }));
+      //setStockAvailability((p) => ({ ...p, [index]: 0 }));
+      setStockAvailability((p) => ({ ...p, [index]: null }));
+
     }
   };
 
   // Enhanced cartons validation
+  // const validateCartonsChange = (index, newCartons, originalValue) => {
+  //   const available = stockAvailability[index] ?? 0;
+  //   const currentCartons = parseInt(newCartons, 10) || 0;
+
+  //   // Negative check
+  //   if (currentCartons < 0) {
+  //     toast.warning('❌ Cartons negative नहीं हो सकते!', {
+  //       position: 'top-center',
+  //       autoClose: 3000,
+  //     });
+  //     return false;
+  //   }
+
+  //   // Zero stock handling
+  //   if (available === 0) {
+  //     // Existing item: allow same or less
+  //     if (originalValue > 0) {
+  //       if (currentCartons > originalValue) {
+  //         toast.warning(
+  //           `⚠️ Stock 0 hai! Originally ${originalValue} cartons the, usse zyada nahi badha sakte`,
+  //           { position: 'top-center', autoClose: 4000 },
+  //         );
+  //         return false;
+  //       }
+  //       toast.info(
+  //         `ℹ️ Stock ab 0 hai but originally ${originalValue} cartons the, same ya kam kar sakte ho`,
+  //         { position: 'top-center', autoClose: 4000 },
+  //       );
+  //       return true;
+  //     }
+
+  //     // New item or originally 0
+  //     toast.warning(`❌ Stock Available: 0 | Koi cartons nahi daal sakte!`, {
+  //       position: 'top-center',
+  //       autoClose: 4000,
+  //       icon: <FaExclamationTriangle />,
+  //     });
+  //     return false;
+  //   }
+
+  //   // Normal stock check
+  //   if (available > 0 && currentCartons > available) {
+  //     toast.warning(
+  //       `❌ Available (${available}) se zyada (${currentCartons}) cartons nahi daal sakte!`,
+  //       { position: 'top-center', autoClose: 4000 },
+  //     );
+  //     return false;
+  //   }
+
+  //   return true;
+  // };
   const validateCartonsChange = (index, newCartons, originalValue) => {
-    const available = stockAvailability[index] ?? 0;
-    const currentCartons = parseInt(newCartons, 10) || 0;
+  const available = stockAvailability[index];
+  const currentCartons = parseInt(newCartons, 10) || 0;
 
-    // Negative check
-    if (currentCartons < 0) {
-      toast.warning('❌ Cartons negative नहीं हो सकते!', {
-        position: 'top-center',
-        autoClose: 3000,
-      });
-      return false;
-    }
+  if (currentCartons < 0) {
+    toast.warning('❌ Cartons negative नहीं हो सकते!', {
+      position: 'top-center',
+      autoClose: 3000,
+    });
+    return false; // ❗ negative truly invalid
+  }
 
-    // Zero stock handling
-    if (available === 0) {
-      // Existing item: allow same or less
-      if (originalValue > 0) {
-        if (currentCartons > originalValue) {
-          toast.warning(
-            `⚠️ Stock 0 hai! Originally ${originalValue} cartons the, usse zyada nahi badha sakte`,
-            { position: 'top-center', autoClose: 4000 },
-          );
-          return false;
-        }
-        toast.info(
-          `ℹ️ Stock ab 0 hai but originally ${originalValue} cartons the, same ya kam kar sakte ho`,
-          { position: 'top-center', autoClose: 4000 },
-        );
-        return true;
-      }
-
-      // New item or originally 0
-      toast.warning(`❌ Stock Available: 0 | Koi cartons nahi daal sakte!`, {
-        position: 'top-center',
-        autoClose: 4000,
-        icon: <FaExclamationTriangle />,
-      });
-      return false;
-    }
-
-    // Normal stock check
-    if (available > 0 && currentCartons > available) {
-      toast.warning(
-        `❌ Available (${available}) se zyada (${currentCartons}) cartons nahi daal sakte!`,
-        { position: 'top-center', autoClose: 4000 },
-      );
-      return false;
-    }
-
+  if (available === 0 && currentCartons > originalValue) {
+    toast.warning(
+      `⚠️ Stock 0 hai. Originally ${originalValue} cartons the, stock negative ho jayega`,
+      { position: 'top-center', autoClose: 3500 }
+    );
     return true;
-  };
+  }
+
+  if (available < 0) {
+    toast.warning(
+      `⚠️ Stock already negative hai (${available})`,
+      { position: 'top-center', autoClose: 3000 }
+    );
+    return true;
+  }
+
+  if (available >= 0 && currentCartons > available) {
+    toast.warning(
+      `⚠️ Available ${available} hai, stock negative ho jayega`,
+      { position: 'top-center', autoClose: 3000 }
+    );
+    return true;
+  }
+
+  return true;
+};
+
 
   const handleItemChange = (index, e) => {
     const { name, value } = e.target;
@@ -1309,6 +1395,15 @@ const EditChallan = () => {
           throw new Error('Please fill all item details');
         }
       }
+      const hasNegativeStock = Object.values(stockAvailability).some(v => v < 0);
+
+if (hasNegativeStock) {
+  toast.warning(
+    '⚠️ Kuch items me stock negative ho raha hai, challan update phir bhi ho raha hai',
+    { position: 'top-center', autoClose: 3500 }
+  );
+}
+
 
       const payload = {
         ...formData,

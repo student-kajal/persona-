@@ -428,11 +428,69 @@ const ChallanForm = () => {
       const res = await api.get('/challans/stock-available', {
         params: { article: article.trim().toUpperCase(), size: size.trim(), color: color.trim().toUpperCase() }
       });
-      setStockAvailability(p => ({ ...p, [index]: res.data.availableCartons || 0 }));
+      //setStockAvailability(p => ({ ...p, [index]: res.data.availableCartons || 0 }));
+      setStockAvailability(p => ({
+  ...p,
+  [index]: res.data.availableCartons
+}));
+
+if (res.data.warning) {
+  toast.warning(res.data.warningMessage, {
+    position: 'top-center',
+    autoClose: 2500
+  });
+}
+
     } catch {
-      setStockAvailability(p => ({ ...p, [index]: 0 }));
+     // setStockAvailability(p => ({ ...p, [index]: 0 }));
+     
+  setStockAvailability(p => ({ ...p, [index]: null }));
+
+
     }
   };
+// ⌨️ Keyboard Shortcuts (Submit + Products PDF)
+useEffect(() => {
+  const handleShortcutKeys = (e) => {
+    // CTRL + S → Submit / Create Challan
+    if (e.ctrlKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+
+      if (saving) return;
+
+      // form submit trigger
+      const form = document.querySelector('form');
+      if (form) {
+        form.requestSubmit();
+      }
+
+      toast.info('💾 Challan submit ho raha hai (Ctrl + S)', {
+        position: 'top-center',
+        autoClose: 1500
+      });
+    }
+
+    // CTRL + P → Download Products PDF
+    if (e.ctrlKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+
+      if (downloadingProductsPDF) return;
+
+      if (!lastCreatedChallanId) {
+        toast.warning('⚠️ Pehle challan create karo', {
+          position: 'top-center',
+          autoClose: 2500
+        });
+        return;
+      }
+
+      downloadProductsPDF(lastCreatedChallanId, formData.invoiceNo);
+    }
+  };
+
+  document.addEventListener('keydown', handleShortcutKeys);
+  return () => document.removeEventListener('keydown', handleShortcutKeys);
+}, [saving, downloadingProductsPDF, lastCreatedChallanId, formData.invoiceNo]);
 
   const handleItemChange = (index, e) => {
     const { name, value } = e.target;
@@ -441,7 +499,10 @@ const ChallanForm = () => {
     if (name === 'article' || name === 'partyName' || name === 'station' || name === 'transport' || name === 'marka') {
       newItems[index][name] = value.toUpperCase();
     } else {
-      newItems[index][name] = name === 'cartons' || name === 'rate' ? parseFloat(value) || 0 : value;
+         newItems[index][name] =
+  name === 'rate' ? parseFloat(value) || 0 : value;
+
+      //  newItems[index][name] = name === 'cartons' || name === 'rate' ? parseFloat(value) || 0 : value;
     }
 
     if (name === 'article') {
@@ -481,7 +542,15 @@ const ChallanForm = () => {
       const cartonsVal = parseInt(value) || 0;
       const available = stockAvailability[index] ?? 0;
       if (cartonsVal < 0) { toast.warning('Cartons negative नहीं हो सकते', { position: 'top-center' }); return; }
-      if (cartonsVal > available && available > 0) { toast.warning(`Available से ज्यादा cartons नहीं डाल सकते! Available: ${available}`); return; }
+      //if (cartonsVal > available && available > 0) { toast.warning(`Available से ज्यादा cartons नहीं डाल सकते! Available: ${available}`); return; }
+      if (cartonsVal > available && available >= 0) {
+  toast.warning(
+    `⚠️ Stock negative ho jayega (Available: ${available})`,
+    { position: 'top-center', autoClose: 3000 }
+  );
+  // ❌ return mat karo
+}
+
       newItems[index].cartons = cartonsVal;
     }
 
@@ -574,19 +643,29 @@ const ChallanForm = () => {
           throw new Error('Please fill all item details');
         }
       }
+      // ⚠️ FINAL WARNING BEFORE SUBMIT (negative stock allowed)
+const hasNegativeStock = Object.values(stockAvailability).some(v => v < 0);
 
-      const stockCheckPayload = formData.items.map(item => ({
-        article: item.article.trim().toUpperCase(),
-        size: item.size.trim(),
-        color: item.color.trim().toUpperCase(),
-        requiredCartons: item.cartons
-      }));
+if (hasNegativeStock) {
+  toast.warning(
+    '⚠️ Kuch items me stock negative ho raha hai, challan phir bhi create hoga',
+    { position: 'top-center', autoClose: 3500 }
+  );
+}
 
-      const stockResponse = await api.post('/challans/stock-check', stockCheckPayload);
-      if (stockResponse.data.hasErrors) {
-        stockResponse.data.errors.forEach(error => toast.error(`Stock Issue: ${error.message}`, { autoClose: 10000, position: 'top-center' }));
-        throw new Error('Cannot create challan due to stock issues');
-      }
+
+      // const stockCheckPayload = formData.items.map(item => ({
+      //   article: item.article.trim().toUpperCase(),
+      //   size: item.size.trim(),
+      //   color: item.color.trim().toUpperCase(),
+      //   requiredCartons: item.cartons
+      // }));
+
+    //  const stockResponse = await api.post('/challans/stock-check', stockCheckPayload);
+    //   if (stockResponse.data.hasErrors) {
+    //      stockResponse.data.errors.forEach(error => toast.error(`Stock Issue: ${error.message}`, { autoClose: 10000, position: 'top-center' }));
+    //     throw new Error('Cannot create challan due to stock issues');
+    //   }
 
       const payload = {
         ...formData,
@@ -803,7 +882,18 @@ const ChallanForm = () => {
 
                             <td>
                               <input type="number" className="form-control form-control-sm" value={item.cartons} onChange={(e) => handleItemChange(index, e)} name="cartons" min="0" required style={{ maxWidth: "80px" }} />
-                              <small className={`text-${stockAvailability[index] > 0 ? 'success' : 'muted'}`}>Available: {stockAvailability[index] ?? '-'}</small>
+                             <small
+  className={
+    stockAvailability[index] < 0
+      ? 'text-danger fw-bold'
+      : stockAvailability[index] === 0
+      ? 'text-muted'
+      : 'text-success'
+  }
+>
+  Available: {stockAvailability[index] ?? '-'}
+</small>
+
                             </td>
 
                             <td><input type="number" className="form-control form-control-sm bg-light" value={item.pairPerCarton} readOnly style={{ maxWidth: "80px" }} /></td>
