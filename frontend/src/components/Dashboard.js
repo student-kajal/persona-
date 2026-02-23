@@ -30,7 +30,23 @@ const Dashboard = () => {
     };
     fetchStats();
   }, []);
+const handleFullExcelExport = async () => {
+  try {
+    const response = await api.get('/products/export-all', {
+      responseType: 'blob'
+    });
 
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'GPFAX-Full-Database.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (err) {
+    alert('Export failed');
+  }
+};
   const styles = {
     dashboardContainer: {
       minHeight: '100vh',
@@ -231,6 +247,19 @@ const Dashboard = () => {
                   <ActionButton to="/challans" icon="📄">
                    Challan PDF
                   </ActionButton>
+                  <button
+  onClick={handleFullExcelExport}
+  style={{
+    padding: '12px 24px',
+    borderRadius: '12px',
+    fontWeight: '600',
+    border: '2px solid #10b981',
+    background: 'white',
+    color: '#10b981'
+  }}
+>
+  💾 Export Full Database
+</button>
                 </div>
               </div>
             </div>

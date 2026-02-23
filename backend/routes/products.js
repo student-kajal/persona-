@@ -3,7 +3,7 @@ const router = express.Router();
 const auth = require('../middlewares/auth');
 const upload = require('../middlewares/upload'); 
 const Product = require('../models/Product'); 
-
+const ExcelJS = require('exceljs');
 
 const {
   createProduct,
@@ -100,6 +100,60 @@ router.get('/articles-suggestions', async (req, res) => {
     res.status(500).json({ data: [] });
   }
 });
+router.get('/export-all', async (req, res) => {
+  try {
+    const products = await Product.find({});
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Full Database');
+
+    worksheet.columns = [
+      { header: 'Article', key: 'article', width: 20 },
+      { header: 'Gender', key: 'gender', width: 15 },
+      { header: 'Stock Type', key: 'stockType', width: 15 },
+      { header: 'Color', key: 'color', width: 15 },
+      { header: 'Size', key: 'size', width: 10 },
+      { header: 'Cartons', key: 'cartons', width: 10 },
+      { header: 'Pair/Carton', key: 'pairPerCarton', width: 12 },
+      { header: 'MRP', key: 'mrp', width: 10 },
+      { header: 'Rate', key: 'rate', width: 10 },
+      { header: 'Series', key: 'series', width: 15 },
+      { header: 'Created By', key: 'createdBy', width: 20 },
+    ];
+
+    products.forEach(p => {
+      worksheet.addRow({
+        article: p.article,
+        gender: p.gender,
+        stockType: p.stockType,
+        color: p.color,
+        size: p.size,
+        cartons: p.cartons,
+        pairPerCarton: p.pairPerCarton,
+        mrp: p.mrp,
+        rate: p.rate,
+        series: p.series,
+        createdBy: p.createdBy
+      });
+    });
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=GPFAX-Full-Database.xlsx'
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (err) {
+    res.status(500).json({ message: 'Export failed' });
+  }
+});
+
 router.get('/:id', auth, getProductById);
 router.put('/:id', auth, upload.single('image'), updateProduct); 
 router.post('/', auth, upload.single('image'), createProduct); 
@@ -110,7 +164,6 @@ router.post('/bulk-restore', auth, bulkRestore);
 
 router.post('/import', auth, importExcel);
 router.post('/permanent-delete', auth, permanentDelete); 
-
 
 
 module.exports = router;

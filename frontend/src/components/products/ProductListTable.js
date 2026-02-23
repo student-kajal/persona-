@@ -380,300 +380,500 @@ const ProductListTable = ({ products, loading, title, onRefresh }) => {
   };
 
 
+// const handleExportMatrixExcel = async () => {
+//   const exportRows = selected.length > 0
+//     ? filteredProducts.filter((p) => selected.includes(p._id))
+//     : filteredProducts;
+
+//   const groupedByCategory = {};
+//   exportRows.forEach((product) => {
+//     const groupInfo = getVirtualGroup(product.stockType, product.gender);
+//     const groupKey = groupInfo.group;
+//     const articleKey = `${product.article}-${product.gender}`;
+//     if (!groupedByCategory[groupKey]) groupedByCategory[groupKey] = {};
+//     if (!groupedByCategory[groupKey][articleKey]) {
+//       groupedByCategory[groupKey][articleKey] = {
+//         article: product.article,
+//         gender: product.gender,
+//         stockType: product.stockType,
+//         series: product.series,
+//         order: groupInfo.order,
+//         variants: [],
+//       };
+//     }
+//     groupedByCategory[groupKey][articleKey].variants.push(product);
+//   });
+
+//   const categoryOrder = [
+//     "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
+//     "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
+//   ];
+
+//   const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
+//     const idxA = categoryOrder.indexOf(a);
+//     const idxB = categoryOrder.indexOf(b);
+//     if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+//     if (idxA !== -1) return -1;
+//     if (idxB !== -1) return 1;
+//     return a.localeCompare(b);
+//   });
+
+//   for (const [, articleGroups] of sortedCategories) {
+//     const articles = Object.values(articleGroups);
+//     articles.sort((a, b) => {
+//       const prefA = extractSeriesPref(a.series);
+//       const prefB = extractSeriesPref(b.series);
+//       if (prefA !== prefB) return prefA - prefB;
+//       if ((a.series || '') < (b.series || '')) return -1;
+//       if ((a.series || '') > (b.series || '')) return 1;
+//       if ((a.article || '') < (b.article || '')) return -1;
+//       if ((a.article || '') > (b.article || '')) return 1;
+//       return 0;
+//     });
+//   }
+
+//   const wb = new ExcelJS.Workbook();
+//   const ws = wb.addWorksheet("Stock Matrix", {
+//     pageSetup: { 
+//       paperSize: 9,
+//       orientation: 'landscape',
+//       fitToPage: true,
+//       fitToWidth: 1,
+//       fitToHeight: 0,
+//       scale: 50, // ✅ 50% zoom
+//       horizontalCentered: true
+//     },
+//     views: [{ zoomScale: 50 }]
+//   });
+
+//   const articleImages = {};
+//   if (matrixExportType === "withImage") {
+//     const imagePromises = [];
+//     for (const [, articles] of sortedCategories) {
+//       for (const articleGroup of Object.values(articles)) {
+//         const imgVariant = articleGroup.variants.find((v) => v.image);
+//         if (imgVariant && imgVariant.image) {
+//           imagePromises.push(
+//             (async () => {
+//               const base64 = await getImageBase64(imgVariant.image);
+//               if (base64) {
+//                 let ext = "png";
+//                 const url = imgVariant.image.toLowerCase();
+//                 if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
+//                 else if (url.includes(".webp")) ext = "webp";
+//                 else if (url.includes(".gif")) ext = "gif";
+//                 articleImages[articleGroup.article] = { base64, ext };
+//               }
+//             })()
+//           );
+//         }
+//       }
+//     }
+//     await Promise.all(imagePromises);
+//   }
+
+//   // ✅ Process each category
+//   for (const [groupName, articleGroups] of sortedCategories) {
+//     // ✅ Category heading only once at start
+//     ws.addRow([`${groupName}`]);
+//     ws.lastRow.font = { bold: true, color: { argb: 'FF1A237E' }, size: 14 };
+//     ws.lastRow.height = 20;
+
+//     const articles = Object.values(articleGroups);
+//     const MAX_ROWS_PER_COLUMN = 65;
+//     const COLUMNS_PER_PAGE = 3;
+
+//     const articleBlocks = articles.map((articleGroup) => {
+//       const colorMap = {};
+//       articleGroup.variants.forEach((v) => {
+//         const color = v.color?.trim() || "DEFAULT";
+//         const size = v.size?.trim().toUpperCase();
+//         if (!colorMap[color]) colorMap[color] = {};
+//         colorMap[color][size] = (colorMap[color][size] || 0) + (v.cartons || 0);
+//       });
+
+//       const colorRows = [];
+//       let isFirstColor = true;
+//       for (const [color, sizeMap] of Object.entries(colorMap)) {
+//         colorRows.push({
+//           article: isFirstColor ? articleGroup.article : '',
+//           color,
+//           sizeMap,
+//           isFirst: isFirstColor
+//         });
+//         isFirstColor = false;
+//       }
+
+//       return {
+//         article: articleGroup.article,
+//         colorRows,
+//         totalRows: colorRows.length,
+//         imageId: matrixExportType === "withImage" && articleImages[articleGroup.article]
+//           ? wb.addImage({
+//               base64: `data:image/${articleImages[articleGroup.article].ext};base64,${articleImages[articleGroup.article].base64}`,
+//               extension: articleImages[articleGroup.article].ext,
+//             })
+//           : null
+//       };
+//     });
+
+//     const columns = [];
+//     let currentColumn = [];
+//     let currentRowCount = 0;
+
+//     for (const block of articleBlocks) {
+//       const blockRows = block.totalRows;
+
+//       if (currentRowCount + blockRows > MAX_ROWS_PER_COLUMN) {
+//         if (currentColumn.length > 0) {
+//           columns.push(currentColumn);
+//           currentColumn = [];
+//           currentRowCount = 0;
+//         }
+//       }
+
+//       currentColumn.push(block);
+//       currentRowCount += blockRows;
+//     }
+
+//     if (currentColumn.length > 0) {
+//       columns.push(currentColumn);
+//     }
+
+//     // ✅ Process columns in sets of 3
+//     for (let pageStart = 0; pageStart < columns.length; pageStart += COLUMNS_PER_PAGE) {
+//       const pageColumns = columns.slice(pageStart, pageStart + COLUMNS_PER_PAGE);
+
+//       // ✅ Calculate sizes per column (only non-zero quantities)
+//       const columnSizes = pageColumns.map(col => {
+//         const sizeSet = new Set();
+//         col.forEach(block => {
+//           block.colorRows.forEach(row => {
+//             Object.entries(row.sizeMap).forEach(([size, qty]) => {
+//               if (qty > 0) sizeSet.add(size);
+//             });
+//           });
+//         });
+//         return [...sizeSet].sort((a, b) =>
+//           isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b)
+//         );
+//       });
+
+//       // ✅ Column headers (ART, COLOR, sizes) - NOT category name
+//       const headerRow = [];
+//       columnSizes.forEach(sizes => {
+//         if (matrixExportType === "withImage") {
+//           headerRow.push("ART", "", "COLOR", ...sizes);
+//         } else {
+//           headerRow.push("ART", "COLOR", ...sizes);
+//         }
+//       });
+//       ws.addRow(headerRow);
+//       ws.lastRow.font = { bold: true, size: 10 };
+
+//       const maxRows = Math.max(...pageColumns.map(col =>
+//         col.reduce((sum, block) => sum + block.totalRows, 0)
+//       ));
+
+//       const startRowNum = ws.lastRow.number + 1;
+//       let colArticleIdx = pageColumns.map(() => 0);
+//       let colColorIdx = pageColumns.map(() => 0);
+
+//       // Fill rows
+//       for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+//         const dataRow = [];
+
+//         pageColumns.forEach((col, colIdx) => {
+//           if (colArticleIdx[colIdx] < col.length) {
+//             const block = col[colArticleIdx[colIdx]];
+//             const colorRow = block.colorRows[colColorIdx[colIdx]];
+
+//             if (colorRow) {
+//               const sizes = columnSizes[colIdx];
+//               if (matrixExportType === "withImage") {
+//                 dataRow.push(
+//                   colorRow.article,
+//                   '',
+//                   colorRow.color,
+//                   ...sizes.map(sz => colorRow.sizeMap[sz] || '')
+//                 );
+//               } else {
+//                 dataRow.push(
+//                   colorRow.article,
+//                   colorRow.color,
+//                   ...sizes.map(sz => colorRow.sizeMap[sz] || '')
+//                 );
+//               }
+
+//               colColorIdx[colIdx]++;
+//               if (colColorIdx[colIdx] >= block.colorRows.length) {
+//                 colArticleIdx[colIdx]++;
+//                 colColorIdx[colIdx] = 0;
+//               }
+//             } else {
+//               const emptyCols = matrixExportType === "withImage" 
+//                 ? 3 + columnSizes[colIdx].length 
+//                 : 2 + columnSizes[colIdx].length;
+//               dataRow.push(...new Array(emptyCols).fill(''));
+//             }
+//           } else {
+//             const emptyCols = matrixExportType === "withImage" 
+//               ? 3 + columnSizes[colIdx].length 
+//               : 2 + columnSizes[colIdx].length;
+//             dataRow.push(...new Array(emptyCols).fill(''));
+//           }
+//         });
+
+//         ws.addRow(dataRow);
+//       }
+
+//       // Images
+//       if (matrixExportType === "withImage") {
+//         pageColumns.forEach((col, colIdx) => {
+//           let colOffset = 0;
+//           for (let i = 0; i < colIdx; i++) {
+//             colOffset += 3 + columnSizes[i].length;
+//           }
+
+//           let rowOffset = startRowNum;
+//           col.forEach(block => {
+//             if (block.imageId) {
+//               try {
+//                 ws.mergeCells(rowOffset, colOffset + 2, rowOffset + 1, colOffset + 3);
+//                 ws.addImage(block.imageId, {
+//                   tl: { col: colOffset + 1.1, row: rowOffset - 0.8 },
+//                   ext: { width: 60, height: 60 },
+//                   editAs: "oneCell"
+//                 });
+//               } catch (err) {
+//                 console.warn(`Image skip: ${block.article}`);
+//               }
+//             }
+//             rowOffset += block.totalRows;
+//           });
+//         });
+//       }
+
+//       // ✅ Page break after every 3 columns
+//       if (pageStart + COLUMNS_PER_PAGE < columns.length) {
+//         ws.addRow([]);
+//         ws.lastRow.addPageBreak();
+//       } else {
+//         ws.addRow([]);
+//       }
+//     }
+//   }
+
+//   ws.columns.forEach((col) => { col.width = 9; });
+//   const buf = await wb.xlsx.writeBuffer();
+//   triggerDownload(
+//     new Blob([buf], {
+//       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+//     }),
+//     'Stock-Matrix-Export.xlsx'
+//   );
+// };
+
 const handleExportMatrixExcel = async () => {
   const exportRows = selected.length > 0
-    ? filteredProducts.filter((p) => selected.includes(p._id))
+    ? filteredProducts.filter(p => selected.includes(p._id))
     : filteredProducts;
 
-  const groupedByCategory = {};
-  exportRows.forEach((product) => {
-    const groupInfo = getVirtualGroup(product.stockType, product.gender);
-    const groupKey = groupInfo.group;
-    const articleKey = `${product.article}-${product.gender}`;
-    if (!groupedByCategory[groupKey]) groupedByCategory[groupKey] = {};
-    if (!groupedByCategory[groupKey][articleKey]) {
-      groupedByCategory[groupKey][articleKey] = {
-        article: product.article,
-        gender: product.gender,
-        stockType: product.stockType,
-        series: product.series,
-        order: groupInfo.order,
-        variants: [],
-      };
-    }
-    groupedByCategory[groupKey][articleKey].variants.push(product);
-  });
-
-  const categoryOrder = [
-    "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
-    "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
-  ];
-
-  const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
-    const idxA = categoryOrder.indexOf(a);
-    const idxB = categoryOrder.indexOf(b);
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-    return a.localeCompare(b);
-  });
-
-  for (const [, articleGroups] of sortedCategories) {
-    const articles = Object.values(articleGroups);
-    articles.sort((a, b) => {
-      const prefA = extractSeriesPref(a.series);
-      const prefB = extractSeriesPref(b.series);
-      if (prefA !== prefB) return prefA - prefB;
-      if ((a.series || '') < (b.series || '')) return -1;
-      if ((a.series || '') > (b.series || '')) return 1;
-      if ((a.article || '') < (b.article || '')) return -1;
-      if ((a.article || '') > (b.article || '')) return 1;
-      return 0;
-    });
-  }
+  if (!exportRows.length) return alert("No data");
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Stock Matrix", {
-    pageSetup: { 
-      paperSize: 9,
-      orientation: 'landscape',
+    pageSetup: {
+      orientation: "landscape",
       fitToPage: true,
       fitToWidth: 1,
-      fitToHeight: 0,
-      scale: 50, // ✅ 50% zoom
-      horizontalCentered: true
-    },
-    views: [{ zoomScale: 50 }]
+      fitToHeight: 0
+    }
   });
 
-  const articleImages = {};
-  if (matrixExportType === "withImage") {
-    const imagePromises = [];
-    for (const [, articles] of sortedCategories) {
-      for (const articleGroup of Object.values(articles)) {
-        const imgVariant = articleGroup.variants.find((v) => v.image);
-        if (imgVariant && imgVariant.image) {
-          imagePromises.push(
-            (async () => {
-              const base64 = await getImageBase64(imgVariant.image);
-              if (base64) {
-                let ext = "png";
-                const url = imgVariant.image.toLowerCase();
-                if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
-                else if (url.includes(".webp")) ext = "webp";
-                else if (url.includes(".gif")) ext = "gif";
-                articleImages[articleGroup.article] = { base64, ext };
-              }
-            })()
-          );
-        }
-      }
+  const categoryPriority = [
+    "EVA LADIES","EVA GENTS","EVA KID LADIES","EVA KIDS GENTS",
+    "PU LADIES","PU GENTS","PU KID LADIES","PU KIDS GENTS"
+  ];
+
+  const grouped = {};
+
+  exportRows.forEach(p => {
+    const cat = getVirtualGroup(p.stockType, p.gender).group;
+    if (!grouped[cat]) grouped[cat] = {};
+    if (!grouped[cat][p.article]) grouped[cat][p.article] = [];
+    grouped[cat][p.article].push(p);
+  });
+
+  let rowPointer = 1;
+  const COLUMN_BLOCK_WIDTH = 8; // each article width
+
+  const sortedCategories = Object.keys(grouped)
+    .sort((a,b)=>categoryPriority.indexOf(a)-categoryPriority.indexOf(b));
+
+  for (const category of sortedCategories) {
+
+    ws.getCell(rowPointer,1).value = category;
+    ws.getCell(rowPointer,1).font = {bold:true,size:14};
+    rowPointer += 2;
+
+    const articles = Object.keys(grouped[category]).sort();
+
+    let colBlock = 0;
+    let baseRow = rowPointer;
+
+    for (let i=0;i<articles.length;i++) {
+
+      const article = articles[i];
+      const variants = grouped[category][article];
+      // 🔹 IMAGE LOGIC START
+let imageId = null;
+
+if (matrixExportType === "withImage") {
+  const imageVariant = variants.find(v => v.image);
+
+  if (imageVariant?.image) {
+    const base64 = await getImageBase64(imageVariant.image);
+
+    if (base64) {
+      let ext = "png";
+      const url = imageVariant.image.toLowerCase();
+
+      if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
+      else if (url.includes(".webp")) ext = "webp";
+      else if (url.includes(".gif")) ext = "gif";
+
+      imageId = wb.addImage({
+        base64: `data:image/${ext};base64,${base64}`,
+        extension: ext
+      });
     }
-    await Promise.all(imagePromises);
   }
+}
+// 🔹 IMAGE LOGIC END
 
-  // ✅ Process each category
-  for (const [groupName, articleGroups] of sortedCategories) {
-    // ✅ Category heading only once at start
-    ws.addRow([`${groupName}`]);
-    ws.lastRow.font = { bold: true, color: { argb: 'FF1A237E' }, size: 14 };
-    ws.lastRow.height = 20;
-
-    const articles = Object.values(articleGroups);
-    const MAX_ROWS_PER_COLUMN = 65;
-    const COLUMNS_PER_PAGE = 3;
-
-    const articleBlocks = articles.map((articleGroup) => {
       const colorMap = {};
-      articleGroup.variants.forEach((v) => {
-        const color = v.color?.trim() || "DEFAULT";
-        const size = v.size?.trim().toUpperCase();
-        if (!colorMap[color]) colorMap[color] = {};
-        colorMap[color][size] = (colorMap[color][size] || 0) + (v.cartons || 0);
+      const sizeSet = new Set();
+
+      variants.forEach(v=>{
+        const c = v.color;
+        const s = v.size?.toUpperCase();
+        const q = v.cartons || 0;
+
+        if (!colorMap[c]) colorMap[c] = {};
+        if (!colorMap[c][s]) colorMap[c][s]=0;
+
+        colorMap[c][s]+=q;
+        sizeSet.add(s);
       });
 
-      const colorRows = [];
-      let isFirstColor = true;
-      for (const [color, sizeMap] of Object.entries(colorMap)) {
-        colorRows.push({
-          article: isFirstColor ? articleGroup.article : '',
-          color,
-          sizeMap,
-          isFirst: isFirstColor
-        });
-        isFirstColor = false;
-      }
+      const sizes = [...sizeSet].sort((a,b)=>
+        isNaN(a)?a.localeCompare(b):parseInt(a)-parseInt(b)
+      );
 
-      return {
-        article: articleGroup.article,
-        colorRows,
-        totalRows: colorRows.length,
-        imageId: matrixExportType === "withImage" && articleImages[articleGroup.article]
-          ? wb.addImage({
-              base64: `data:image/${articleImages[articleGroup.article].ext};base64,${articleImages[articleGroup.article].base64}`,
-              extension: articleImages[articleGroup.article].ext,
-            })
-          : null
-      };
-    });
+      const validColors = Object.entries(colorMap)
+        .filter(([_,m])=>Object.values(m).some(v=>v!==0));
 
-    const columns = [];
-    let currentColumn = [];
-    let currentRowCount = 0;
+      if (!validColors.length) continue;
 
-    for (const block of articleBlocks) {
-      const blockRows = block.totalRows;
+      const startCol = 1 + colBlock * COLUMN_BLOCK_WIDTH;
+      let localRow = baseRow;
 
-      if (currentRowCount + blockRows > MAX_ROWS_PER_COLUMN) {
-        if (currentColumn.length > 0) {
-          columns.push(currentColumn);
-          currentColumn = [];
-          currentRowCount = 0;
+      // HEADER
+    // HEADER
+
+  if (imageId && matrixExportType === "withImage") {
+
+  ws.addImage(imageId, {
+    tl: { col: startCol, row: baseRow - 1 },
+    ext: { width: 55, height: 55 },
+    editAs: "oneCell"
+  });
+
+  ws.getRow(baseRow).height = 45;
+}
+      let firstColor=true;
+
+      for (const [color,sizeMap] of validColors){
+
+        if(firstColor){
+          ws.getCell(localRow,startCol).value=article;
+          firstColor=false;
         }
-      }
 
-      currentColumn.push(block);
-      currentRowCount += blockRows;
-    }
-
-    if (currentColumn.length > 0) {
-      columns.push(currentColumn);
-    }
-
-    // ✅ Process columns in sets of 3
-    for (let pageStart = 0; pageStart < columns.length; pageStart += COLUMNS_PER_PAGE) {
-      const pageColumns = columns.slice(pageStart, pageStart + COLUMNS_PER_PAGE);
-
-      // ✅ Calculate sizes per column (only non-zero quantities)
-      const columnSizes = pageColumns.map(col => {
-        const sizeSet = new Set();
-        col.forEach(block => {
-          block.colorRows.forEach(row => {
-            Object.entries(row.sizeMap).forEach(([size, qty]) => {
-              if (qty > 0) sizeSet.add(size);
-            });
-          });
-        });
-        return [...sizeSet].sort((a, b) =>
-          isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b)
-        );
-      });
-
-      // ✅ Column headers (ART, COLOR, sizes) - NOT category name
-      const headerRow = [];
-      columnSizes.forEach(sizes => {
         if (matrixExportType === "withImage") {
-          headerRow.push("ART", "", "COLOR", ...sizes);
-        } else {
-          headerRow.push("ART", "COLOR", ...sizes);
-        }
-      });
-      ws.addRow(headerRow);
-      ws.lastRow.font = { bold: true, size: 10 };
+  ws.getCell(localRow, startCol + 2).value = color;
+} else {
+  ws.getCell(localRow, startCol + 1).value = color;
+}
 
-      const maxRows = Math.max(...pageColumns.map(col =>
-        col.reduce((sum, block) => sum + block.totalRows, 0)
-      ));
+//         sizes.forEach((s,idx)=>{
+//           const val=sizeMap[s]||"";
+//           const cell = ws.getCell(
+//   localRow,
+//   matrixExportType === "withImage"
+//     ? startCol + 3 + idx
+//     : startCol + 2 + idx
+// );
+//           cell.value=val===""?"":val;
 
-      const startRowNum = ws.lastRow.number + 1;
-      let colArticleIdx = pageColumns.map(() => 0);
-      let colColorIdx = pageColumns.map(() => 0);
+//           if(val<0){
+//             cell.fill={
+//               type:"pattern",
+//               pattern:"solid",
+//               fgColor:{argb:"FFFF0000"}
+//             };
+//             cell.font={color:{argb:"FFFFFFFF"},bold:true};
+//           }
+//         });
+for (let idx = 0; idx < sizes.length; idx++) {
+  const s = sizes[idx];
+  const val = sizeMap[s] || "";
 
-      // Fill rows
-      for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
-        const dataRow = [];
+  const colIndex =
+    matrixExportType === "withImage"
+      ? startCol + 3 + idx
+      : startCol + 2 + idx;
 
-        pageColumns.forEach((col, colIdx) => {
-          if (colArticleIdx[colIdx] < col.length) {
-            const block = col[colArticleIdx[colIdx]];
-            const colorRow = block.colorRows[colColorIdx[colIdx]];
+  const cell = ws.getCell(localRow, colIndex);
+  cell.value = val === "" ? "" : val;
 
-            if (colorRow) {
-              const sizes = columnSizes[colIdx];
-              if (matrixExportType === "withImage") {
-                dataRow.push(
-                  colorRow.article,
-                  '',
-                  colorRow.color,
-                  ...sizes.map(sz => colorRow.sizeMap[sz] || '')
-                );
-              } else {
-                dataRow.push(
-                  colorRow.article,
-                  colorRow.color,
-                  ...sizes.map(sz => colorRow.sizeMap[sz] || '')
-                );
-              }
-
-              colColorIdx[colIdx]++;
-              if (colColorIdx[colIdx] >= block.colorRows.length) {
-                colArticleIdx[colIdx]++;
-                colColorIdx[colIdx] = 0;
-              }
-            } else {
-              const emptyCols = matrixExportType === "withImage" 
-                ? 3 + columnSizes[colIdx].length 
-                : 2 + columnSizes[colIdx].length;
-              dataRow.push(...new Array(emptyCols).fill(''));
-            }
-          } else {
-            const emptyCols = matrixExportType === "withImage" 
-              ? 3 + columnSizes[colIdx].length 
-              : 2 + columnSizes[colIdx].length;
-            dataRow.push(...new Array(emptyCols).fill(''));
-          }
-        });
-
-        ws.addRow(dataRow);
+  if (val < 0) {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFF0000" }
+    };
+    cell.font = { color: { argb: "FFFFFFFF" }, bold: true };
+  }
+}
+        localRow++;
       }
 
-      // Images
-      if (matrixExportType === "withImage") {
-        pageColumns.forEach((col, colIdx) => {
-          let colOffset = 0;
-          for (let i = 0; i < colIdx; i++) {
-            colOffset += 3 + columnSizes[i].length;
-          }
+      const blockHeight = localRow - baseRow;
 
-          let rowOffset = startRowNum;
-          col.forEach(block => {
-            if (block.imageId) {
-              try {
-                ws.mergeCells(rowOffset, colOffset + 2, rowOffset + 1, colOffset + 3);
-                ws.addImage(block.imageId, {
-                  tl: { col: colOffset + 1.1, row: rowOffset - 0.8 },
-                  ext: { width: 60, height: 60 },
-                  editAs: "oneCell"
-                });
-              } catch (err) {
-                console.warn(`Image skip: ${block.article}`);
-              }
-            }
-            rowOffset += block.totalRows;
-          });
-        });
-      }
+      colBlock++;
 
-      // ✅ Page break after every 3 columns
-      if (pageStart + COLUMNS_PER_PAGE < columns.length) {
-        ws.addRow([]);
-        ws.lastRow.addPageBreak();
-      } else {
-        ws.addRow([]);
+      if (colBlock === 3) {
+        rowPointer = baseRow + blockHeight + 1;
+        baseRow = rowPointer;
+        colBlock = 0;
       }
     }
+
+    rowPointer = baseRow + 2;
   }
 
-  ws.columns.forEach((col) => { col.width = 9; });
-  const buf = await wb.xlsx.writeBuffer();
+  ws.columns.forEach(col=>col.width=9);
+
+  const buffer = await wb.xlsx.writeBuffer();
   triggerDownload(
-    new Blob([buf], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    new Blob([buffer],{
+      type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }),
-    'Stock-Matrix-Export.xlsx'
+    "Stock-Matrix.xlsx"
   );
 };
-
 
 
 const handleGeneratePDF = async () => {
