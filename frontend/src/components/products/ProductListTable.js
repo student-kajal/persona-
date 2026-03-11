@@ -676,202 +676,421 @@ const ProductListTable = ({ products, loading, title, onRefresh }) => {
 
 const handleExportMatrixExcel = async () => {
   const exportRows = selected.length > 0
-    ? filteredProducts.filter(p => selected.includes(p._id))
+    ? filteredProducts.filter((p) => selected.includes(p._id))
     : filteredProducts;
 
-  if (!exportRows.length) return alert("No data");
+  // ─── Group products by category → article ──────────────────────
+  const groupedByCategory = {};
+  exportRows.forEach((product) => {
+    const groupInfo = getVirtualGroup(product.stockType, product.gender);
+    const groupKey  = groupInfo.group;
+    const articleKey = `${product.article}-${product.gender}`;
+    if (!groupedByCategory[groupKey]) groupedByCategory[groupKey] = {};
+    if (!groupedByCategory[groupKey][articleKey]) {
+      groupedByCategory[groupKey][articleKey] = {
+        article: product.article,
+        gender: product.gender,
+        stockType: product.stockType,
+        series: product.series,
+        order: groupInfo.order,
+        variants: [],
+      };
+    }
+    groupedByCategory[groupKey][articleKey].variants.push(product);
+  });
 
+  // ─── Sort categories ────────────────────────────────────────────
+  const categoryOrder = [
+    "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
+    "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
+  ];
+  const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
+    const idxA = categoryOrder.indexOf(a);
+    const idxB = categoryOrder.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  // ─── Sort articles within each category ────────────────────────
+  for (const [, articleGroups] of sortedCategories) {
+    Object.values(articleGroups).sort((a, b) => {
+      const prefA = extractSeriesPref(a.series);
+      const prefB = extractSeriesPref(b.series);
+      if (prefA !== prefB) return prefA - prefB;
+      if ((a.series || '') < (b.series || '')) return -1;
+      if ((a.series || '') > (b.series || '')) return 1;
+      if ((a.article || '') < (b.article || '')) return -1;
+      if ((a.article || '') > (b.article || '')) return 1;
+      return 0;
+    });
+  }
+
+  // ─── Workbook setup ─────────────────────────────────────────────
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Stock Matrix", {
     pageSetup: {
-      orientation: "landscape",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0
-    }
+      paperSize: 9,           // A4
+      orientation: 'landscape',
+      fitToPage: false,       // ✅ false — use scale instead of fitTo
+      scale: 58,              // ✅ 58% scale on landscape A4 fits 3 columns perfectly
+      horizontalCentered: true,
+    },
+    views: [{ zoomScale: 100 }]
   });
+  ws.properties.defaultRowHeight = 15;
 
-  const categoryPriority = [
-    "EVA LADIES","EVA GENTS","EVA KID LADIES","EVA KIDS GENTS",
-    "PU LADIES","PU GENTS","PU KID LADIES","PU KIDS GENTS"
-  ];
+  // ─── Styles ─────────────────────────────────────────────────────
+  // At 65% print scale, font 9 prints like ~6pt — same as the PDF
+  const FONT_SIZE   = 12;
+  const HDR_SIZE    = 12;
+  const CAT_SIZE    = 14;
+  const ROW_HEIGHT  = 15;
+  const HDR_HEIGHT  = 16;
+  const CAT_HEIGHT  = 19;
 
-  const grouped = {};
+  const NEG_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } };
+  const HDR_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+  const CAT_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDD7EE' } };
+  const ART_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDEDED' } };
 
-  exportRows.forEach(p => {
-    const cat = getVirtualGroup(p.stockType, p.gender).group;
-    if (!grouped[cat]) grouped[cat] = {};
-    if (!grouped[cat][p.article]) grouped[cat][p.article] = [];
-    grouped[cat][p.article].push(p);
-  });
+  const NEG_FONT  = { bold: true, color: { argb: 'FFFFFFFF' }, size: FONT_SIZE, name: 'Arial' };
+  const CAT_FONT  = { bold: true, color: { argb: 'FF1A237E' }, size: CAT_SIZE,  name: 'Arial' };
+  const HDR_FONT  = { bold: true,                               size: HDR_SIZE,  name: 'Arial' };
+  const ART_FONT  = { bold: true,                               size: FONT_SIZE, name: 'Arial' };
+  const CLR_FONT  = {                                            size: FONT_SIZE, name: 'Arial', italic: true };
+  const NUM_FONT  = {                                            size: FONT_SIZE, name: 'Arial' };
 
-  let rowPointer = 1;
-  const COLUMN_BLOCK_WIDTH = 8; // each article width
+  const centerAlign = { horizontal: 'center', vertical: 'middle', wrapText: false, shrinkToFit: false, indent: 0 };
+  const leftAlign   = { horizontal: 'left',   vertical: 'middle', wrapText: false, shrinkToFit: false, indent: 0 };
 
-  const sortedCategories = Object.keys(grouped)
-    .sort((a,b)=>categoryPriority.indexOf(a)-categoryPriority.indexOf(b));
+  const thinBorder = {
+    top:    { style: 'thin', color: { argb: 'FFBDBDBD' } },
+    bottom: { style: 'thin', color: { argb: 'FFBDBDBD' } },
+    left:   { style: 'thin', color: { argb: 'FFBDBDBD' } },
+    right:  { style: 'thin', color: { argb: 'FFBDBDBD' } },
+  };
 
-  for (const category of sortedCategories) {
-
-    ws.getCell(rowPointer,1).value = category;
-    ws.getCell(rowPointer,1).font = {bold:true,size:14};
-    rowPointer += 2;
-
-    const articles = Object.keys(grouped[category]).sort();
-
-    let colBlock = 0;
-    let baseRow = rowPointer;
-
-    for (let i=0;i<articles.length;i++) {
-
-      const article = articles[i];
-      const variants = grouped[category][article];
-      // 🔹 IMAGE LOGIC START
-let imageId = null;
-
-if (matrixExportType === "withImage") {
-  const imageVariant = variants.find(v => v.image);
-
-  if (imageVariant?.image) {
-    const base64 = await getImageBase64(imageVariant.image);
-
-    if (base64) {
-      let ext = "png";
-      const url = imageVariant.image.toLowerCase();
-
-      if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
-      else if (url.includes(".webp")) ext = "webp";
-      else if (url.includes(".gif")) ext = "gif";
-
-      imageId = wb.addImage({
-        base64: `data:image/${ext};base64,${base64}`,
-        extension: ext
-      });
-    }
-  }
-}
-// 🔹 IMAGE LOGIC END
-
-      const colorMap = {};
-      const sizeSet = new Set();
-
-      variants.forEach(v=>{
-        const c = v.color;
-        const s = v.size?.toUpperCase();
-        const q = v.cartons || 0;
-
-        if (!colorMap[c]) colorMap[c] = {};
-        if (!colorMap[c][s]) colorMap[c][s]=0;
-
-        colorMap[c][s]+=q;
-        sizeSet.add(s);
-      });
-
-      const sizes = [...sizeSet].sort((a,b)=>
-        isNaN(a)?a.localeCompare(b):parseInt(a)-parseInt(b)
-      );
-
-      const validColors = Object.entries(colorMap)
-        .filter(([_,m])=>Object.values(m).some(v=>v!==0));
-
-      if (!validColors.length) continue;
-
-      const startCol = 1 + colBlock * COLUMN_BLOCK_WIDTH;
-      let localRow = baseRow;
-
-      // HEADER
-    // HEADER
-
-  if (imageId && matrixExportType === "withImage") {
-
-  ws.addImage(imageId, {
-    tl: { col: startCol, row: baseRow - 1 },
-    ext: { width: 55, height: 55 },
-    editAs: "oneCell"
-  });
-
-  ws.getRow(baseRow).height = 45;
-}
-      let firstColor=true;
-
-      for (const [color,sizeMap] of validColors){
-
-        if(firstColor){
-          ws.getCell(localRow,startCol).value=article;
-          firstColor=false;
+  // ─── Images ─────────────────────────────────────────────────────
+  const articleImages = {};
+  if (matrixExportType === "withImage") {
+    const imagePromises = [];
+    for (const [, articles] of sortedCategories) {
+      for (const articleGroup of Object.values(articles)) {
+        const imgVariant = articleGroup.variants.find((v) => v.image);
+        if (imgVariant?.image) {
+          imagePromises.push((async () => {
+            const base64 = await getImageBase64(imgVariant.image);
+            if (base64) {
+              let ext = "png";
+              const url = imgVariant.image.toLowerCase();
+              if (url.includes(".jpg") || url.includes(".jpeg")) ext = "jpeg";
+              else if (url.includes(".webp")) ext = "webp";
+              else if (url.includes(".gif"))  ext = "gif";
+              articleImages[articleGroup.article] = { base64, ext };
+            }
+          })());
         }
-
-        if (matrixExportType === "withImage") {
-  ws.getCell(localRow, startCol + 2).value = color;
-} else {
-  ws.getCell(localRow, startCol + 1).value = color;
-}
-
-//         sizes.forEach((s,idx)=>{
-//           const val=sizeMap[s]||"";
-//           const cell = ws.getCell(
-//   localRow,
-//   matrixExportType === "withImage"
-//     ? startCol + 3 + idx
-//     : startCol + 2 + idx
-// );
-//           cell.value=val===""?"":val;
-
-//           if(val<0){
-//             cell.fill={
-//               type:"pattern",
-//               pattern:"solid",
-//               fgColor:{argb:"FFFF0000"}
-//             };
-//             cell.font={color:{argb:"FFFFFFFF"},bold:true};
-//           }
-//         });
-for (let idx = 0; idx < sizes.length; idx++) {
-  const s = sizes[idx];
-  const val = sizeMap[s] || "";
-
-  const colIndex =
-    matrixExportType === "withImage"
-      ? startCol + 3 + idx
-      : startCol + 2 + idx;
-
-  const cell = ws.getCell(localRow, colIndex);
-  cell.value = val === "" ? "" : val;
-
-  if (val < 0) {
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFFF0000" }
-    };
-    cell.font = { color: { argb: "FFFFFFFF" }, bold: true };
-  }
-}
-        localRow++;
-      }
-
-      const blockHeight = localRow - baseRow;
-
-      colBlock++;
-
-      if (colBlock === 3) {
-        rowPointer = baseRow + blockHeight + 1;
-        baseRow = rowPointer;
-        colBlock = 0;
       }
     }
-
-    rowPointer = baseRow + 2;
+    await Promise.all(imagePromises);
   }
 
-  ws.columns.forEach(col=>col.width=9);
+  // ─── Helper: style a data cell ──────────────────────────────────
+  const styleCell = (cell, value, { isNeg = false, isArt = false, isClr = false, isHdr = false, isCat = false } = {}) => {
+    cell.value  = value === 0 ? '' : value; // show 0 as blank
+    cell.border = thinBorder;
 
-  const buffer = await wb.xlsx.writeBuffer();
+    if (isCat) {
+      cell.font      = CAT_FONT;
+      cell.fill      = CAT_FILL;
+      cell.alignment = leftAlign;
+    } else if (isHdr) {
+      cell.font      = HDR_FONT;
+      cell.fill      = HDR_FILL;
+      cell.alignment = centerAlign;
+    } else if (isNeg) {
+      cell.font      = NEG_FONT;
+      cell.fill      = NEG_FILL;
+      cell.alignment = centerAlign;
+    } else if (isArt) {
+      cell.font      = ART_FONT;
+      cell.fill      = ART_FILL;
+      cell.alignment = leftAlign;
+    } else if (isClr) {
+      cell.font      = CLR_FONT;
+      cell.alignment = leftAlign;
+    } else {
+      cell.font      = NUM_FONT;
+      cell.alignment = centerAlign;
+    }
+  };
+
+  // ─── Build article blocks (pre-processed) ───────────────────────
+  const buildBlocks = (articleGroups) => {
+    return Object.values(articleGroups).map((articleGroup) => {
+      const colorMap = {};
+      articleGroup.variants.forEach((v) => {
+        const color = v.color?.trim() || "DEFAULT";
+        const size  = v.size?.trim().toUpperCase();
+        if (!colorMap[color]) colorMap[color] = {};
+        colorMap[color][size] = (colorMap[color][size] || 0) + (v.cartons || 0);
+      });
+
+      const colorRows = [];
+      let isFirst = true;
+      for (const [color, sizeMap] of Object.entries(colorMap)) {
+        // skip rows where ALL sizes are exactly 0 (negatives still show)
+        const hasAnyNonZero = Object.values(sizeMap).some(q => q !== 0);
+        if (!hasAnyNonZero) continue;
+        colorRows.push({ article: isFirst ? articleGroup.article : '', color, sizeMap, isFirst });
+        isFirst = false;
+      }
+
+      if (!colorRows.length) return null;
+
+      return {
+        article: articleGroup.article,
+        colorRows,
+        totalRows: colorRows.length,
+        imageId: matrixExportType === "withImage" && articleImages[articleGroup.article]
+          ? wb.addImage({
+              base64: `data:image/${articleImages[articleGroup.article].ext};base64,${articleImages[articleGroup.article].base64}`,
+              extension: articleImages[articleGroup.article].ext,
+            })
+          : null
+      };
+    }).filter(Boolean);
+  };
+
+  // ─── Smart column distribution ──────────────────────────────────
+  // Instead of just filling left→right, distribute articles evenly across
+  // up to COLUMNS_PER_PAGE columns so small categories look balanced.
+  const MAX_ROWS_PER_COL  = 55;   // rows before forcing a new column
+  const COLUMNS_PER_PAGE  = 3;
+
+  const packIntoColumns = (blocks) => {
+    const totalRows = blocks.reduce((s, b) => s + b.totalRows, 0);
+
+    // For small categories: aim to fill columns evenly
+    const idealRowsPerCol = Math.ceil(totalRows / COLUMNS_PER_PAGE);
+    const rowLimit = Math.min(MAX_ROWS_PER_COL, Math.max(idealRowsPerCol, 10));
+
+    const columns = [];
+    let cur = [], curRows = 0;
+    for (const block of blocks) {
+      if (curRows + block.totalRows > rowLimit && cur.length > 0) {
+        columns.push(cur);
+        cur = [];
+        curRows = 0;
+      }
+      cur.push(block);
+      curRows += block.totalRows;
+    }
+    if (cur.length > 0) columns.push(cur);
+    return columns;
+  };
+
+  // ─── Render a page-set (3 columns) ──────────────────────────────
+  const renderPageSet = (pageColumns, groupName, isFirstPageOfCategory) => {
+
+    // ── Category heading row (always printed at start of each page-set) ──
+    const catRow = ws.addRow([groupName]);
+    catRow.height = CAT_HEIGHT;
+    styleCell(catRow.getCell(1), groupName, { isCat: true });
+
+    // ── Compute sizes per column (only non-zero totals) ──
+    const columnSizes = pageColumns.map(col => {
+      const sizeQty = {};
+      col.forEach(block => {
+        block.colorRows.forEach(row => {
+          Object.entries(row.sizeMap).forEach(([size, qty]) => {
+            sizeQty[size] = (sizeQty[size] || 0) + qty;
+          });
+        });
+      });
+      return Object.entries(sizeQty)
+        .filter(([, total]) => total !== 0)
+        .map(([size]) => size)
+        .sort((a, b) => {
+          const na = parseFloat(a), nb = parseFloat(b);
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          return a.localeCompare(b);
+        });
+    });
+
+    // ── Column offsets ──
+    const colOffsets = [];
+    let offset = 1;
+    pageColumns.forEach((_, ci) => {
+      colOffsets.push(offset);
+      const w = matrixExportType === "withImage"
+        ? 3 + columnSizes[ci].length
+        : 2 + columnSizes[ci].length;
+      offset += w;
+    });
+
+    // ── Header row ──
+    const hdrRow = ws.addRow([]);
+    hdrRow.height = HDR_HEIGHT;
+    pageColumns.forEach((_, ci) => {
+      const base  = colOffsets[ci];
+      const sizes = columnSizes[ci];
+      if (matrixExportType === "withImage") {
+        styleCell(hdrRow.getCell(base),     "ART",   { isHdr: true });
+        styleCell(hdrRow.getCell(base + 1), "",      { isHdr: true });
+        styleCell(hdrRow.getCell(base + 2), "COLOR", { isHdr: true });
+        sizes.forEach((sz, si) => styleCell(hdrRow.getCell(base + 3 + si), sz, { isHdr: true }));
+      } else {
+        styleCell(hdrRow.getCell(base),     "ART",   { isHdr: true });
+        styleCell(hdrRow.getCell(base + 1), "COLOR", { isHdr: true });
+        sizes.forEach((sz, si) => styleCell(hdrRow.getCell(base + 2 + si), sz, { isHdr: true }));
+      }
+    });
+
+    // ── Data rows ──
+    const maxRows    = Math.max(...pageColumns.map(col => col.reduce((s, b) => s + b.totalRows, 0)));
+    const startRowNum = ws.lastRow.number + 1;
+    const artIdx     = pageColumns.map(() => 0);
+    const clrIdx     = pageColumns.map(() => 0);
+
+    for (let r = 0; r < maxRows; r++) {
+      const dataRow = ws.addRow([]);
+      dataRow.height = ROW_HEIGHT;
+
+      pageColumns.forEach((col, ci) => {
+        const base  = colOffsets[ci];
+        const sizes = columnSizes[ci];
+        const empty = matrixExportType === "withImage" ? 3 + sizes.length : 2 + sizes.length;
+
+        if (artIdx[ci] < col.length) {
+          const block    = col[artIdx[ci]];
+          const colorRow = block.colorRows[clrIdx[ci]];
+
+          if (colorRow) {
+            if (matrixExportType === "withImage") {
+              styleCell(dataRow.getCell(base),     colorRow.article, { isArt: colorRow.isFirst });
+              styleCell(dataRow.getCell(base + 1), '',               {});
+              styleCell(dataRow.getCell(base + 2), colorRow.color,   { isClr: true });
+              sizes.forEach((sz, si) => {
+                const qty = colorRow.sizeMap[sz];
+                const val = (qty === undefined || qty === 0) ? '' : qty;
+                styleCell(dataRow.getCell(base + 3 + si), val, { isNeg: typeof val === 'number' && val < 0 });
+              });
+            } else {
+              styleCell(dataRow.getCell(base),     colorRow.article, { isArt: colorRow.isFirst });
+              styleCell(dataRow.getCell(base + 1), colorRow.color,   { isClr: true });
+              sizes.forEach((sz, si) => {
+                const qty = colorRow.sizeMap[sz];
+                const val = (qty === undefined || qty === 0) ? '' : qty;
+                styleCell(dataRow.getCell(base + 2 + si), val, { isNeg: typeof val === 'number' && val < 0 });
+              });
+            }
+
+            clrIdx[ci]++;
+            if (clrIdx[ci] >= block.colorRows.length) {
+              artIdx[ci]++;
+              clrIdx[ci] = 0;
+            }
+          } else {
+            for (let e = 0; e < empty; e++) styleCell(dataRow.getCell(base + e), '', {});
+          }
+        } else {
+          for (let e = 0; e < empty; e++) styleCell(dataRow.getCell(base + e), '', {});
+        }
+      });
+    }
+
+    // ── Images ──
+    if (matrixExportType === "withImage") {
+      pageColumns.forEach((col, ci) => {
+        const base0 = colOffsets[ci] - 1; // 0-based
+        let rowOff  = startRowNum;
+        col.forEach(block => {
+          if (block.imageId !== null) {
+            try {
+              ws.addImage(block.imageId, {
+                tl: { col: base0 + 1.05, row: rowOff - 0.9 },
+                ext: { width: 55, height: 55 },
+                editAs: "oneCell"
+              });
+            } catch (e) { console.warn("Image skip:", block.article); }
+          }
+          rowOff += block.totalRows;
+        });
+      });
+    }
+  };
+
+  // ─── Main render loop ────────────────────────────────────────────
+  let firstCategory = true;
+
+  for (const [groupName, articleGroups] of sortedCategories) {
+    const blocks = buildBlocks(articleGroups);
+    if (!blocks.length) continue;
+
+    const columns    = packIntoColumns(blocks);
+    const pageSets   = [];
+    for (let i = 0; i < columns.length; i += COLUMNS_PER_PAGE) {
+      pageSets.push(columns.slice(i, i + COLUMNS_PER_PAGE));
+    }
+
+    // Each category starts on a fresh page (except the very first)
+    if (!firstCategory) {
+      ws.addRow([]); // no page break - continue on same page
+    }
+    firstCategory = false;
+
+    pageSets.forEach((pageSet, psIdx) => {
+      // Subsequent page-sets within same category also get a page break before them
+      if (psIdx > 0) {
+        ws.addRow([]).addPageBreak();
+      }
+      renderPageSet(pageSet, groupName, psIdx === 0);
+    });
+  }
+
+  // ─── Column widths ───────────────────────────────────────────────
+  // ART cols = wider, size cols = narrow, color cols = medium
+  // Column widths: scan every cell to find max content per column
+  // Track ART/COLOR positions from header rows, everything else = size col
+  const colMaxLen   = {};
+  const artColNums  = new Set();
+  const colorColNums = new Set();
+
+  ws.eachRow((row) => {
+    row.eachCell({ includeEmpty: false }, (cell, colNum) => {
+      const v = String(cell.value ?? '');
+      if (v === 'ART')   artColNums.add(colNum);
+      if (v === 'COLOR') colorColNums.add(colNum);
+      if (!colMaxLen[colNum] || v.length > colMaxLen[colNum])
+        colMaxLen[colNum] = v.length;
+    });
+  });
+
+  // COLOR col is always the one immediately after ART col
+  artColNums.forEach(n => colorColNums.add(n + 1));
+
+  ws.columns.forEach((col, idx) => {
+    const colNum = idx + 1;
+    const maxLen = colMaxLen[colNum] || 3;
+    if (artColNums.has(colNum))         col.width = Math.max(maxLen * 1.2 + 1, 12);
+    else if (colorColNums.has(colNum))  col.width = Math.max(maxLen * 1.2 + 1, 10);
+    else                                col.width = 4; // ✅ ALL size cols = fixed 4, no exceptions
+  });
+
+  // Print settings
+  ws.pageSetup.margins = {
+    left: 0.15, right: 0.15,
+    top: 0.2,   bottom: 0.2,
+    header: 0.1, footer: 0.1,
+  };
+
+  const buf = await wb.xlsx.writeBuffer();
   triggerDownload(
-    new Blob([buffer],{
-      type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    }),
-    "Stock-Matrix.xlsx"
+    new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    'Stock-Matrix-Export.xlsx'
   );
 };
 
