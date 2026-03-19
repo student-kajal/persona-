@@ -240,9 +240,8 @@ const Login = () => {
   const handleSubmit = async e => {
     e.preventDefault();
     setLoading(true);
-  //  const res = await login(form.email, form.password, rememberMe); // ✅ CHANGED: Added rememberMe
-   const res = await login(form.email, form.password);
-  if (res.success) {
+    const res = await login(form.email, form.password, rememberMe); // ✅ CHANGED: Added rememberMe
+    if (res.success) {
       toast.success('Login successful');
       navigate('/');
     } else {
