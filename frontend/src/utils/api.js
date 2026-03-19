@@ -20,24 +20,16 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL:
-    process.env.NODE_ENV === 'development'
-      ? 'http://localhost:5000/api'
-      : process.env.REACT_APP_API_BASE_URL,
-
-  withCredentials: true // 🔥 MUST (cookie ke liye)
+  baseURL: 'http://72.61.243.157:5000/api',
+  withCredentials: true // 🔥 MUST
 });
 
-// ✅ Request interceptor
+// ❌ TOKEN HEADER REMOVE
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('accessToken'); // 🔥 name change
-  if (token) {
-    config.headers['x-auth-token'] = token;
-  }
   return config;
 });
 
-// ✅ Response interceptor (AUTO REFRESH)
+// ✅ AUTO REFRESH (optional but ok)
 api.interceptors.response.use(
   response => response,
   async error => {
@@ -47,21 +39,15 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const res = await axios.post(
-          `${api.defaults.baseURL}/auth/refresh-token`,
+        await axios.post(
+          'http://72.61.243.157:5000/api/auth/refresh-token',
           {},
-          { withCredentials: true } // 🔥 important
+          { withCredentials: true }
         );
 
-        const newAccessToken = res.data.accessToken;
-
-        localStorage.setItem('accessToken', newAccessToken);
-
-        originalRequest.headers['x-auth-token'] = newAccessToken;
         return api(originalRequest);
 
       } catch (err) {
-        localStorage.removeItem('accessToken');
         window.location.href = '/login';
       }
     }
