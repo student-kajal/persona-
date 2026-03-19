@@ -21,13 +21,19 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: 'https://gpfax.sbs/api',
-  withCredentials: true // 🔥 important
+  withCredentials: true
 });
 
-// ❌ koi token attach nahi
-api.interceptors.request.use(config => config);
+// ✅ Har request mein token lagao
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
+});
 
-// ✅ refresh flow
+// ✅ 401 pe refresh karo aur naya token save karo
 api.interceptors.response.use(
   response => response,
   async error => {
@@ -37,15 +43,20 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        await axios.post(
+        const res = await axios.post(
           'https://gpfax.sbs/api/auth/refresh-token',
           {},
           { withCredentials: true }
         );
 
+        const newToken = res.data.accessToken;
+        localStorage.setItem('accessToken', newToken);
+
+        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
         return api(originalRequest);
 
       } catch (err) {
+        localStorage.removeItem('accessToken');
         window.location.href = '/login';
       }
     }

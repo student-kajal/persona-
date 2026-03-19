@@ -87,18 +87,15 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ check auth
+  // ✅ App open hone par check karo token hai ya nahi
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('accessToken');
 
       if (token) {
         try {
-          const res = await api.get('/auth/me', {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          });
+          // interceptor khud token lagayega
+          const res = await api.get('/auth/me');
           setUser(res.data);
         } catch {
           localStorage.removeItem('accessToken');
@@ -118,16 +115,10 @@ export function AuthProvider({ children }) {
       const res = await api.post('/auth/login', { email, password });
 
       const token = res.data.accessToken;
-
-      // 🔥 IMPORTANT
       localStorage.setItem('accessToken', token);
 
-      const userRes = await api.get('/auth/me', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
+      // interceptor khud token lagayega
+      const userRes = await api.get('/auth/me');
       setUser(userRes.data);
 
       return { success: true };
