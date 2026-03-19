@@ -20,16 +20,14 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://72.61.243.157:5000/api',
-  withCredentials: true // 🔥 MUST
+  baseURL: 'https://gpfax.sbs/api', // ✅ FIXED
+  withCredentials: true
 });
 
-// ❌ TOKEN HEADER REMOVE
-api.interceptors.request.use(config => {
-  return config;
-});
+// request interceptor (no token needed)
+api.interceptors.request.use(config => config);
 
-// ✅ AUTO REFRESH (optional but ok)
+// response interceptor
 api.interceptors.response.use(
   response => response,
   async error => {
@@ -40,7 +38,7 @@ api.interceptors.response.use(
 
       try {
         await axios.post(
-          'http://72.61.243.157:5000/api/auth/refresh-token',
+          'https://gpfax.sbs/api/auth/refresh-token', // ✅ FIXED
           {},
           { withCredentials: true }
         );
