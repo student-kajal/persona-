@@ -85,25 +85,24 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ check auth on load
+  // ✅ check auth
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('accessToken');
 
       if (token) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
         try {
-          const res = await api.get('/auth/me');
+          const res = await api.get('/auth/me', {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
           setUser(res.data);
-          setAccessToken(token);
         } catch {
           localStorage.removeItem('accessToken');
           setUser(null);
-          setAccessToken(null);
         }
       }
 
@@ -120,14 +119,16 @@ export function AuthProvider({ children }) {
 
       const token = res.data.accessToken;
 
-      // 🔥 SAVE TOKEN (IMPORTANT)
+      // 🔥 IMPORTANT
       localStorage.setItem('accessToken', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-      const userRes = await api.get('/auth/me');
+      const userRes = await api.get('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
 
       setUser(userRes.data);
-      setAccessToken(token);
 
       return { success: true };
 
@@ -146,14 +147,11 @@ export function AuthProvider({ children }) {
     } catch {}
 
     localStorage.removeItem('accessToken');
-    delete api.defaults.headers.common['Authorization'];
-
     setUser(null);
-    setAccessToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
