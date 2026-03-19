@@ -85,48 +85,30 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Check auth on load
+  // ✅ check auth using cookie
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('accessToken');
-
-      if (token) {
-        api.defaults.headers.common['x-auth-token'] = token;
-
-        try {
-          const res = await api.get('/auth/me');
-          setUser(res.data);
-          setAccessToken(token);
-        } catch {
-          localStorage.removeItem('accessToken');
-          setUser(null);
-          setAccessToken(null);
-        }
+      try {
+        const res = await api.get('/auth/me'); // cookie auto jayegi
+        setUser(res.data);
+      } catch {
+        setUser(null);
       }
-
       setLoading(false);
     };
 
     checkAuth();
   }, []);
 
-  // ✅ LOGIN
+  // ✅ LOGIN (no localStorage)
   const login = async (email, password) => {
     try {
-      const res = await api.post('/auth/login', { email, password });
-
-      const token = res.data.accessToken;
-
-      localStorage.setItem('accessToken', token);
-      api.defaults.headers.common['x-auth-token'] = token;
+      await api.post('/auth/login', { email, password });
 
       const userRes = await api.get('/auth/me');
-
       setUser(userRes.data);
-      setAccessToken(token);
 
       return { success: true };
 
@@ -141,18 +123,14 @@ export function AuthProvider({ children }) {
   // ✅ LOGOUT
   const logout = async () => {
     try {
-      await api.post('/auth/logout'); // 🔥 backend call
-    } catch (err) {}
-
-    localStorage.removeItem('accessToken');
-    delete api.defaults.headers.common['x-auth-token'];
+      await api.post('/auth/logout');
+    } catch {}
 
     setUser(null);
-    setAccessToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
