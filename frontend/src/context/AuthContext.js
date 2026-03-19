@@ -85,30 +85,49 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ check auth using cookie
+  // ✅ check auth on load
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        const res = await api.get('/auth/me'); // cookie auto jayegi
-        setUser(res.data);
-      } catch {
-        setUser(null);
+      const token = localStorage.getItem('accessToken');
+
+      if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+        try {
+          const res = await api.get('/auth/me');
+          setUser(res.data);
+          setAccessToken(token);
+        } catch {
+          localStorage.removeItem('accessToken');
+          setUser(null);
+          setAccessToken(null);
+        }
       }
+
       setLoading(false);
     };
 
     checkAuth();
   }, []);
 
-  // ✅ LOGIN (no localStorage)
+  // ✅ LOGIN
   const login = async (email, password) => {
     try {
-      await api.post('/auth/login', { email, password });
+      const res = await api.post('/auth/login', { email, password });
+
+      const token = res.data.accessToken;
+
+      // 🔥 SAVE TOKEN (IMPORTANT)
+      localStorage.setItem('accessToken', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       const userRes = await api.get('/auth/me');
+
       setUser(userRes.data);
+      setAccessToken(token);
 
       return { success: true };
 
@@ -126,11 +145,15 @@ export function AuthProvider({ children }) {
       await api.post('/auth/logout');
     } catch {}
 
+    localStorage.removeItem('accessToken');
+    delete api.defaults.headers.common['Authorization'];
+
     setUser(null);
+    setAccessToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, accessToken, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
