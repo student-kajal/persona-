@@ -89,7 +89,7 @@ exports.register = async (req, res) => {
     // HTTP-only cookie
    res.cookie('refreshToken', refreshToken, {
   httpOnly: true,
-  secure: false, // 🔥 DEV ke liye
+  secure: true, // 🔥 DEV ke liye
   sameSite: 'None', // 🔥 DEV ke liye
   maxAge: 7 * 24 * 60 * 60 * 1000
 });
@@ -130,7 +130,7 @@ exports.login = async (req, res) => {
     // 🔥 HTTP-only cookie
   res.cookie('refreshToken', refreshToken, {
   httpOnly: true,
-  secure: false, // 🔥 DEV ke liye
+  secure: true, // 🔥 DEV ke liye
   sameSite: 'None', // 🔥 DEV ke liye
   maxAge: 7 * 24 * 60 * 60 * 1000
 });
