@@ -97,9 +97,8 @@ export default function SalaryEntryEdit() {
       formData.append("image", imageFile);
       formData.append("article", entry.article);
 
-      const res = await api.post("/upload/article-image", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // Do NOT set Content-Type manually — axios sets multipart/form-data with boundary automatically
+      const res = await api.post("/upload/article-image", formData);
 
       if (res.data.success) {
         setCurrentImage(res.data.imageUrl);
