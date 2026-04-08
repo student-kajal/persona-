@@ -189,6 +189,36 @@ exports.updateProduct = async (req, res) => {
 
 
 
+// Update image for ALL products with the same article name
+exports.updateArticleImage = async (req, res) => {
+  try {
+    const article = (req.body.article || '').trim();
+    if (!article) {
+      return res.status(400).json({ success: false, error: 'Article is required' });
+    }
+
+    const imageUrl = req.file?.path; // Cloudinary URL
+    if (!imageUrl) {
+      return res.status(400).json({ success: false, error: 'No image uploaded' });
+    }
+
+    // Update image on ALL variants of this article
+    const result = await Product.updateMany(
+      { article: { $regex: new RegExp(`^${article}$`, 'i') } },
+      { $set: { image: imageUrl } }
+    );
+
+    res.json({
+      success: true,
+      imageUrl,
+      updatedCount: result.modifiedCount
+    });
+  } catch (err) {
+    console.error('updateArticleImage error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 exports.createProduct = async (req, res) => {
   console.log("Create Product Request Body:", req.body);
   try {

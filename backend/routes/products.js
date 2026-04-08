@@ -16,15 +16,16 @@ const {
 //  getSalaryReport,
   getProductById,
   updateProduct,
+  updateArticleImage,
   getDeletedProducts,
   permanentDelete,
-  getArticleOptions, 
+  getArticleOptions,
   getArticleDetails ,
    getArticleGenderInfo,
   getArticleGenderSizeInfo,
    getAllowedGendersForArticle,
    getAllUserEntriesForProduct,
-   
+
 } = require('../controllers/productController');
 
 
@@ -154,8 +155,9 @@ router.get('/export-all', async (req, res) => {
   }
 });
 
+router.put('/update-article-image', auth, upload.single('image'), updateArticleImage);
 router.get('/:id', auth, getProductById);
-router.put('/:id', auth, upload.single('image'), updateProduct); 
+router.put('/:id', auth, upload.single('image'), updateProduct);
 router.post('/', auth, upload.single('image'), createProduct); 
 router.post('/bulk-delete', auth, bulkDelete);
 router.post('/bulk-restore', auth, bulkRestore);
