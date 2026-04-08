@@ -97,7 +97,7 @@ export default function SalaryEntryEdit() {
       formData.append("image", imageFile);
       formData.append("article", entry.article);
 
-      const res = await api.put("/products/update-article-image", formData, {
+      const res = await api.post("/upload/article-image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
