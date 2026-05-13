@@ -1,23 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import ProductListTable from '../components/products/ProductListTable';
-import api from '../utils/api';
+import React from 'react';
+import OptimizedProductTable from '../components/products/OptimizedProductTable';
 
+// Old ProductListTable is kept intact for other pages that may still use it.
+// This page now uses the server-side paginated + virtualised table.
 const Products = () => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const res = await api.get('/products');
-      setProducts(res.data.data || []);
-      setLoading(false);
-    };
-    fetchProducts();
-  }, []);
-
   return (
-    <div className="container py-4">
-      <ProductListTable products={products} loading={loading} title="All Products" />
+    <div style={{ padding: '20px 24px', maxWidth: 1400, margin: '0 auto' }}>
+      <OptimizedProductTable title="All Stock" />
     </div>
   );
 };

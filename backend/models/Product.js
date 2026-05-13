@@ -73,4 +73,18 @@ ProductSchema.pre('save', function (next) {
   next();
 });
 
+// ── Performance indexes (background: true = zero downtime on existing data) ──
+// Compound index for the optimized endpoint's primary sort + filter pattern.
+ProductSchema.index({ isDeleted: 1, cartons: -1, article: 1 }, { background: true });
+// Support filter-options distinct queries.
+ProductSchema.index({ isDeleted: 1, stockType: 1, gender: 1 },  { background: true });
+ProductSchema.index({ isDeleted: 1, color: 1 },                  { background: true });
+ProductSchema.index({ isDeleted: 1, size: 1 },                   { background: true });
+ProductSchema.index({ isDeleted: 1, series: 1 },                 { background: true });
+ProductSchema.index({ isDeleted: 1, mrp: 1 },                    { background: true });
+ProductSchema.index({ isDeleted: 1, rate: 1 },                   { background: true });
+ProductSchema.index({ isDeleted: 1, pairPerCarton: 1 },          { background: true });
+// createdAt for history/time-range queries.
+ProductSchema.index({ createdAt: -1 },                           { background: true });
+
 module.exports = mongoose.model('Product', ProductSchema);

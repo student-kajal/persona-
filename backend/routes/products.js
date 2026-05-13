@@ -28,6 +28,11 @@ const {
 
 } = require('../controllers/productController');
 
+const {
+  getOptimizedProducts,
+  getFilterOptions,
+} = require('../controllers/optimizedProductController');
+
 
 const {
   getSizePricing,
@@ -37,6 +42,11 @@ const {
 
 
 router.get('/', getProducts);
+
+// ── Optimized endpoints (server-side pagination, sorting, filtering) ──
+// Must be registered before /:id to avoid Express matching "optimized" as an id.
+router.get('/optimized',      getOptimizedProducts);
+router.get('/filter-options', getFilterOptions);
 
 
 router.get('/article-options', getArticleOptions);
