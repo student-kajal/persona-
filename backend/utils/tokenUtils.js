@@ -7,16 +7,19 @@ const generateAccessToken = (userId) =>
 const generateRefreshToken = (userId, days = 7) =>
   jwt.sign({ user: { id: userId } }, process.env.JWT_REFRESH_SECRET, { expiresIn: `${days}d` });
 
-// Store only the hash in DB — raw token lives only in the httpOnly cookie
 const hashToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
+
+// Cookie scoped to /api/auth so it is NOT sent on every API request —
+// only on the refresh, login, logout paths under that prefix.
+const COOKIE_PATH = '/api/auth';
 
 const cookieOptions = (days) => ({
   httpOnly: true,
   secure:   process.env.NODE_ENV === 'production',
   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   maxAge:   days * 24 * 60 * 60 * 1000,
-  path:     '/',
+  path:     COOKIE_PATH,
 });
 
 const setRefreshCookie = (res, token, days = 7) =>
@@ -27,7 +30,7 @@ const clearRefreshCookie = (res) =>
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    path:     '/',
+    path:     COOKIE_PATH,
   });
 
 module.exports = {

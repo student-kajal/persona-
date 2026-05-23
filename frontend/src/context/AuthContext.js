@@ -1,133 +1,91 @@
-
-
-// import React, { createContext, useState, useEffect, useContext } from 'react';
-// import api from '../utils/api';
-
-// const AuthContext = createContext();
-
-// export function AuthProvider({ children }) {
-//   const [user, setUser] = useState(null);
-//   const [token, setToken] = useState(localStorage.getItem('token'));
-//   const [loading, setLoading] = useState(true);
-
-//   useEffect(() => {
-//     const checkAuth = async () => {
-//       const token = localStorage.getItem('token');
-//       if (token) {
-//         api.defaults.headers.common['x-auth-token'] = token;
-//         try {
-//           const res = await api.get('/auth/me');
-//           setUser(res.data);
-//         } catch {
-//           localStorage.removeItem('token');
-//           setUser(null);
-//         }
-//       }
-//       setLoading(false);
-//     };
-//     checkAuth();
-//   }, []);
-
-//   const login = async (email, password) => {
-//     try {
-//       const res = await api.post('/auth/login', { email, password });
-//       localStorage.setItem('token', res.data.token);
-//       api.defaults.headers.common['x-auth-token'] = res.data.token;
-//       const userRes = await api.get('/auth/me');
-//       setUser(userRes.data);
-//       setToken(res.data.token);
-//       return { success: true };
-//     } catch (err) {
-//       return { success: false, error: err.response?.data?.error || 'Login failed' };
-//     }
-//   };
-
-//   const logout = () => {
-//     localStorage.removeItem('token');
-//     delete api.defaults.headers.common['x-auth-token'];
-//     setUser(null);
-//     setToken(null);
-//   };
-
-//   return (
-//     <AuthContext.Provider value={{ user, token, loading, login, logout }}>
-//       {children}
-//     </AuthContext.Provider>
-//   );
-// }
-
-// export const useAuth = () => useContext(AuthContext);
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import api from '../utils/api';
+import api, { setAccessToken, clearAccessToken } from '../utils/api';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user,    setUser]    = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ CHANGED - Check both localStorage and sessionStorage
+  // ── On mount: try a silent refresh to restore session from httpOnly cookie ──
+  // If the cookie is still valid the user never sees a login page on refresh.
   useEffect(() => {
-    const checkAuth = async () => {
-      const localToken = localStorage.getItem('token');
-      const sessionToken = sessionStorage.getItem('token');
-      const authToken = localToken || sessionToken;
-      
-      if (authToken) {
-        api.defaults.headers.common['x-auth-token'] = authToken;
-        try {
-          const res = await api.get('/auth/me');
-          setUser(res.data);
-          setToken(authToken);
-        } catch {
-          localStorage.removeItem('token');
-          sessionStorage.removeItem('token');
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.post('/auth/refresh', {}, { withCredentials: true });
+        if (cancelled) return;
+        setAccessToken(data.accessToken || data.token);
+        const { data: me } = await api.get('/auth/me');
+        if (!cancelled) setUser(me);
+      } catch {
+        if (!cancelled) {
+          clearAccessToken();
           setUser(null);
-          setToken(null);
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
-    };
-    checkAuth();
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  // ✅ CHANGED - Accept rememberMe parameter
+  // ── Cross-tab logout + session-expired listener ────────────────────────────
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'auth:logout') {
+        clearAccessToken();
+        setUser(null);
+      }
+    };
+    const onExpired = () => {
+      clearAccessToken();
+      setUser(null);
+    };
+    window.addEventListener('storage',            onStorage);
+    window.addEventListener('auth:session-expired', onExpired);
+    return () => {
+      window.removeEventListener('storage',              onStorage);
+      window.removeEventListener('auth:session-expired', onExpired);
+    };
+  }, []);
+
+  // ── Login ─────────────────────────────────────────────────────────────────
+  // rememberMe is forwarded to the backend which sets the cookie duration
+  // (7 days normally, 30 days when rememberMe = true).
   const login = async (email, password, rememberMe = false) => {
     try {
-      const res = await api.post('/auth/login', { email, password });
-      const authToken = res.data.token;
-      
-      // ✅ NEW LOGIC - Store based on rememberMe
-      if (rememberMe) {
-        localStorage.setItem('token', authToken);
-        sessionStorage.removeItem('token');
-      } else {
-        sessionStorage.setItem('token', authToken);
-        localStorage.removeItem('token');
-      }
-      
-      api.defaults.headers.common['x-auth-token'] = authToken;
-      const userRes = await api.get('/auth/me');
-      setUser(userRes.data);
-      setToken(authToken);
+      const { data } = await api.post('/auth/login', { email, password, rememberMe });
+      setAccessToken(data.accessToken || data.token);
+      const { data: me } = await api.get('/auth/me');
+      setUser(me);
       return { success: true };
     } catch (err) {
       return { success: false, error: err.response?.data?.error || 'Login failed' };
     }
   };
 
-  // ✅ CHANGED - Clear both storages
-  const logout = () => {
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    delete api.defaults.headers.common['x-auth-token'];
+  // ── Logout (current device) ────────────────────────────────────────────────
+  const logout = async () => {
+    try { await api.post('/auth/logout'); } catch { /* ignore network errors */ }
+    clearAccessToken();
     setUser(null);
-    setToken(null);
+    // Notify other open tabs to also log out
+    localStorage.setItem('auth:logout', Date.now().toString());
+    localStorage.removeItem('auth:logout');
+  };
+
+  // ── Logout all devices ─────────────────────────────────────────────────────
+  const logoutAll = async () => {
+    try { await api.post('/auth/logout-all'); } catch {}
+    clearAccessToken();
+    setUser(null);
+    localStorage.setItem('auth:logout', Date.now().toString());
+    localStorage.removeItem('auth:logout');
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, logoutAll }}>
       {children}
     </AuthContext.Provider>
   );
