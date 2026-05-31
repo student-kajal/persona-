@@ -1052,9 +1052,9 @@ const genderOptions = [
 ];
 
 const stockTypeOptions = [
-  { value: 'pu', label: 'PU' },
-  { value: 'eva', label: 'EVA' },
-  { value: 'new', label: 'New' },
+  { value: 'pu',        label: 'PU' },
+  { value: 'eva',       label: 'EVA' },
+  { value: 'injection', label: 'Injection' },
 ];
 
 const initialForm = {

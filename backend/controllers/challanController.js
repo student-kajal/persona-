@@ -130,24 +130,25 @@ exports.createChallan = async (req, res) => {
     const salaryMap = new Map();
     salaryTotals.forEach(s => salaryMap.set(s._id.toString(), s.totalSalary));
 
-    // Single aggregate for ALL existing challan totals
+    // Net challan out per product (CHALLAN_OUT negative + CHALLAN_IN positive).
+    // Negating the sum gives the net cartons still out.
     const challanTotals = await History.aggregate([
       {
         $match: {
           product: { $in: productIds },
-          action: 'CHALLAN_OUT'
+          action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] }
         }
       },
       {
         $group: {
           _id: "$product",
-          totalOut: { $sum: { $abs: "$quantityChanged" } }
+          totalOut: { $sum: { $multiply: ["$quantityChanged", -1] } }
         }
       }
     ]).session(session);
 
     const challanMap = new Map();
-    challanTotals.forEach(c => challanMap.set(c._id.toString(), c.totalOut || 0));
+    challanTotals.forEach(c => challanMap.set(c._id.toString(), Math.max(0, c.totalOut || 0)));
 
     // Validate stock + prepare bulk history
     const historyEntries = [];
@@ -468,24 +469,24 @@ exports.getStockAvailable = async (req, res) => {
     ]);
     const totalSalary = totalSalaryAgg[0]?.total || 0;
 
-    // ✅ Total challan out
+    // Net challan out (includes CHALLAN_IN reversals from deleted challans)
     const challanAgg = await History.aggregate([
       {
         $match: {
           product: product._id,
-          action: 'CHALLAN_OUT'
+          action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] }
         }
       },
       {
         $group: {
           _id: null,
-          totalOut: { $sum: { $abs: '$quantityChanged' } }
+          totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } }
         }
       }
     ]);
-    const totalChallanOut = challanAgg[0]?.totalOut || 0;
+    const totalChallanOut = Math.max(0, challanAgg[0]?.totalOut || 0);
 
-    // ✅ Negative allowed
+    // Negative allowed (shows oversold state as warning)
     const availableCartons = totalSalary - totalChallanOut;
 
     return res.json({
@@ -706,25 +707,21 @@ exports.updateChallan = async (req, res) => {
         {
           $match: {
             product: product._id,
-            action: 'CHALLAN_OUT'
+            action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] }
           }
         },
         {
           $group: {
             _id: null,
-            totalOut: { $sum: { $abs: '$quantityChanged' } }
+            totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } }
           }
         }
       ]).session(session);
-      const totalChallanOut = challanAgg[0]?.totalOut || 0;
+      const totalChallanOut = Math.max(0, challanAgg[0]?.totalOut || 0);
 
-     // product.cartons = Math.max(0, totalSalary - totalChallanOut);
-     product.cartons = totalSalary - totalChallanOut;
-
+      product.cartons = totalSalary - totalChallanOut;
       product.cartonsChallanedOut = totalChallanOut;
       await product.save({ session });
-
-      console.log(`✅ Stock reverted: ${oldItem.article} | New available: ${product.cartons}`);
     }
 
     // 3. APPLY NEW STOCK (deduct new quantities)
@@ -751,27 +748,19 @@ exports.updateChallan = async (req, res) => {
         {
           $match: {
             product: product._id,
-            action: 'CHALLAN_OUT'
+            action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] }
           }
         },
         {
           $group: {
             _id: null,
-            totalOut: { $sum: { $abs: '$quantityChanged' } }
+            totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } }
           }
         }
       ]).session(session);
-      const existingChallanOut = challanAgg[0]?.totalOut || 0;
-    //  const availableCartons = Math.max(0, totalSalary - existingChallanOut);
-   const availableCartons = totalSalary - existingChallanOut;
+      const existingChallanOut = Math.max(0, challanAgg[0]?.totalOut || 0);
+      const availableCartons   = totalSalary - existingChallanOut;
 
-
-
-      // if (availableCartons < newItem.cartons) {
-      //   throw new Error(`Stock insufficient for ${newItem.article}. Available: ${availableCartons}, Requested: ${newItem.cartons}`);
-      // }
-
-      // ✅ Create new history entry WITH challanId
       await History.create([{
         product: product._id,
         action: 'CHALLAN_OUT',
@@ -780,36 +769,31 @@ exports.updateChallan = async (req, res) => {
         updatedByName: (req.user?.username || 'SYSTEM').toUpperCase(),
         partyName: (req.body.partyName || '').toUpperCase(),
         invoiceNo: existingChallan.invoiceNo,
-        challanId: existingChallan._id, // ✅ CRITICAL: Add this line
+        challanId: existingChallan._id,
         note: `Challan UPDATED for ${(req.body.partyName||'').toUpperCase()} (inv ${existingChallan.invoiceNo})`,
         timestamp: new Date(),
       }], { session });
 
-      // Recalculate product stock
+      // Recalculate product stock after inserting new history entry
       const newChallanAgg = await History.aggregate([
         {
           $match: {
             product: product._id,
-            action: 'CHALLAN_OUT'
+            action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] }
           }
         },
         {
           $group: {
             _id: null,
-            totalOut: { $sum: { $abs: '$quantityChanged' } }
+            totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } }
           }
         }
       ]).session(session);
-      const newTotalChallanOut = newChallanAgg[0]?.totalOut || 0;
+      const newTotalChallanOut = Math.max(0, newChallanAgg[0]?.totalOut || 0);
 
-    //  product.cartons = Math.max(0, totalSalary - newTotalChallanOut);
-    product.cartons = totalSalary - newTotalChallanOut;
-
-
+      product.cartons             = totalSalary - newTotalChallanOut;
       product.cartonsChallanedOut = newTotalChallanOut;
       await product.save({ session });
-
-      console.log(`✅ New stock applied: ${newItem.article} | Available: ${product.cartons}`);
     }
 
     // 4. Update challan document

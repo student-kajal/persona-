@@ -332,6 +332,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FaPlus, FaTrash, FaSave, FaTimes, FaSpinner, FaFilePdf, FaImages } from 'react-icons/fa';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import './ChallanForm.css';
 
@@ -356,7 +357,8 @@ function SuggestionPortal({ anchorEl, children }) {
 }
 
 const ChallanForm = () => {
-  const navigate = useNavigate();
+  const navigate     = useNavigate();
+  const queryClient  = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadingProductsPDF, setDownloadingProductsPDF] = useState(false);
@@ -687,6 +689,9 @@ if (hasNegativeStock) {
       challanCreated = true;
       const challanId = response.data.data?._id || response.data.data?.id || response.data._id || response.data.id;
       if (!challanId) throw new Error('Challan ID not found in response');
+
+      // Force products table to refetch so stock shows updated immediately
+      queryClient.invalidateQueries({ queryKey: ['optimized-products'] });
 
       setLastCreatedChallanId(challanId);
       toast.success('Challan created successfully! 🎉');

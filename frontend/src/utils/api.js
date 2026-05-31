@@ -4,10 +4,31 @@ import axios from 'axios';
 let _accessToken  = null;
 let _refreshTimer = null;
 
+// ── Cross-tab token sync via BroadcastChannel ─────────────────────────────────
+// When one tab refreshes successfully it broadcasts the new token so all other
+// tabs receive it immediately. This prevents multiple tabs from all calling
+// /auth/refresh simultaneously (which would cause token-rotation revocations).
+const _channel = typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel('gpfax_auth')
+  : null;
+
+if (_channel) {
+  _channel.onmessage = (event) => {
+    if (event.data?.type === 'TOKEN_REFRESH' && event.data.token) {
+      // Silently adopt the new token — no outbound refresh needed from this tab
+      _accessToken = event.data.token;
+      scheduleProactiveRefresh(event.data.token);
+    }
+    if (event.data?.type === 'SESSION_EXPIRED') {
+      clearAccessToken();
+      window.dispatchEvent(new CustomEvent('auth:session-expired'));
+    }
+  };
+}
+
 // ── Proactive refresh scheduler ────────────────────────────────────────────────
 // Decodes the JWT exp claim and fires a silent refresh 60 s before expiry.
-// This means the user never hits a real 401 due to token age — the token is
-// always replaced before the server rejects it.
+// Random jitter (0–30 s) is added so multiple tabs never fire at the same instant.
 function scheduleProactiveRefresh(token) {
   if (_refreshTimer) {
     clearTimeout(_refreshTimer);
@@ -16,9 +37,13 @@ function scheduleProactiveRefresh(token) {
   if (!token) return;
 
   try {
-    const payload   = JSON.parse(atob(token.split('.')[1]));
+    // JWT uses base64url (- and _ instead of + and /). atob needs standard base64.
+    const b64url    = token.split('.')[1];
+    const b64       = b64url.replace(/-/g, '+').replace(/_/g, '/');
+    const payload   = JSON.parse(atob(b64));
     const expiresMs = payload.exp * 1000;
-    const delay     = Math.max(expiresMs - Date.now() - 60_000, 0); // 60 s buffer
+    const jitterMs  = Math.random() * 30_000; // 0–30 s random offset
+    const delay     = Math.max(expiresMs - Date.now() - 60_000 - jitterMs, 0);
 
     _refreshTimer = setTimeout(async () => {
       try {
@@ -28,15 +53,18 @@ function scheduleProactiveRefresh(token) {
           { withCredentials: true },
         );
         const newToken = data.accessToken || data.token;
-        setAccessToken(newToken); // also reschedules the next timer
+        setAccessToken(newToken);
+        // Tell all other open tabs so they don't make their own refresh call
+        _channel?.postMessage({ type: 'TOKEN_REFRESH', token: newToken });
       } catch {
-        // Refresh token is also expired / revoked — force logout
+        // Refresh token expired / revoked — broadcast logout to all tabs
         clearAccessToken();
+        _channel?.postMessage({ type: 'SESSION_EXPIRED' });
         window.dispatchEvent(new CustomEvent('auth:session-expired'));
       }
     }, delay);
   } catch {
-    // Malformed token — ignore, let the 401 interceptor handle it
+    // Malformed token — ignore, 401 interceptor is the safety net
   }
 }
 
@@ -65,7 +93,8 @@ const api = axios.create({
 });
 
 // ── Refresh-queue state ────────────────────────────────────────────────────────
-// Guards against multiple simultaneous 401s all triggering a refresh race.
+// Guards against multiple simultaneous 401s (within one tab) all triggering a
+// refresh race. The BroadcastChannel handles the cross-tab equivalent.
 let isRefreshing = false;
 let failedQueue  = [];
 
@@ -87,8 +116,8 @@ api.interceptors.request.use(
 );
 
 // ── Response interceptor – fallback silent refresh on 401 ────────────────────
-// The proactive timer prevents most 401s. This is a safety net for the cases
-// that slip through (e.g., the tab was sleeping and the timer never fired).
+// The proactive timer + BroadcastChannel prevent most 401s. This is the safety
+// net for edge cases (tab sleeping, timer throttled by browser, etc.).
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -123,6 +152,7 @@ api.interceptors.response.use(
         );
         const newToken = data.accessToken || data.token;
         setAccessToken(newToken);
+        _channel?.postMessage({ type: 'TOKEN_REFRESH', token: newToken });
         processQueue(null, newToken);
 
         original.headers['Authorization'] = `Bearer ${newToken}`;
@@ -131,6 +161,7 @@ api.interceptors.response.use(
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         clearAccessToken();
+        _channel?.postMessage({ type: 'SESSION_EXPIRED' });
         window.dispatchEvent(new CustomEvent('auth:session-expired'));
         return Promise.reject(refreshErr);
       } finally {

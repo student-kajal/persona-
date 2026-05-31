@@ -15,7 +15,11 @@ const SORT_PRIORITY_EXPR = {
       { case: { $and: [{ $eq: ['$stockType', 'pu'] },  { $eq: ['$gender', 'ladies'] }] },      then: 5 },
       { case: { $and: [{ $eq: ['$stockType', 'pu'] },  { $eq: ['$gender', 'gents'] }] },       then: 6 },
       { case: { $and: [{ $eq: ['$stockType', 'pu'] },  { $eq: ['$gender', 'kids_ladies'] }] }, then: 7 },
-      { case: { $and: [{ $eq: ['$stockType', 'pu'] },  { $eq: ['$gender', 'kids_gents'] }] },  then: 8 },
+      { case: { $and: [{ $eq: ['$stockType', 'pu'] },        { $eq: ['$gender', 'kids_gents'] }] },  then: 8 },
+      { case: { $and: [{ $eq: ['$stockType', 'injection'] }, { $eq: ['$gender', 'ladies'] }] },       then: 9 },
+      { case: { $and: [{ $eq: ['$stockType', 'injection'] }, { $eq: ['$gender', 'gents'] }] },        then: 10 },
+      { case: { $and: [{ $eq: ['$stockType', 'injection'] }, { $eq: ['$gender', 'kids_ladies'] }] },  then: 11 },
+      { case: { $and: [{ $eq: ['$stockType', 'injection'] }, { $eq: ['$gender', 'kids_gents'] }] },   then: 12 },
     ],
     default: 99
   }
@@ -162,14 +166,17 @@ exports.getOptimizedProducts = async (req, res) => {
         { $match: { product: { $in: productIds } } },
         { $group: { _id: '$product', total: { $sum: '$cartons' } } }
       ]),
+      // Include CHALLAN_IN (challan-delete reversals) so that deleted challans
+      // correctly restore stock. Formula: netOut = -sum(quantityChanged) because
+      // CHALLAN_OUT stores negative values and CHALLAN_IN stores positive values.
       History.aggregate([
-        { $match: { product: { $in: productIds }, action: 'CHALLAN_OUT' } },
-        { $group: { _id: '$product', totalOut: { $sum: { $abs: '$quantityChanged' } } } }
+        { $match: { product: { $in: productIds }, action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] } } },
+        { $group: { _id: '$product', totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } } } }
       ])
     ]);
 
     const salaryMap  = new Map(salaryTotals.map(s => [s._id.toString(), s.total]));
-    const challanMap = new Map(challanTotals.map(c => [c._id.toString(), c.totalOut]));
+    const challanMap = new Map(challanTotals.map(c => [c._id.toString(), Math.max(0, c.totalOut)]));
 
     const finalProducts = products.map(product => {
       const idStr      = product._id.toString();

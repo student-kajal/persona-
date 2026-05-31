@@ -23,21 +23,28 @@ const triggerDownload = (blob, filename) => {
 };
 // Helper functions
 function getVirtualGroup(stockType, gender) {
-  const st = (stockType || '').toLowerCase();
-  const gen = (gender || '').toLowerCase();
+  const st  = (stockType || '').toLowerCase();
+  const gen = (gender    || '').toLowerCase();
   if (st === 'pu') {
-    if (gen === 'ladies') return { group: 'PU LADIES', order: 7 };
-    if (gen === 'kids_ladies') return { group: 'PU KID LADIES', order: 8 };
-    if (gen === 'gents') return { group: 'PU GENTS', order: 9 };
-    if (gen === 'kids_gents') return { group: 'PU KIDS GENTS', order: 10 };
+    if (gen === 'ladies')     return { group: 'PU LADIES',          order: 7 };
+    if (gen === 'kids_ladies')return { group: 'PU KID LADIES',      order: 8 };
+    if (gen === 'gents')      return { group: 'PU GENTS',           order: 9 };
+    if (gen === 'kids_gents') return { group: 'PU KIDS GENTS',      order: 10 };
     return { group: 'PU OTHER', order: 11 };
   }
   if (st === 'eva') {
-    if (gen === 'ladies') return { group: 'EVA LADIES', order: 2 };
-    if (gen === 'kids_ladies') return { group: 'EVA KID LADIES', order: 3 };
-    if (gen === 'gents') return { group: 'EVA GENTS', order: 4 };
-    if (gen === 'kids_gents') return { group: 'EVA KIDS GENTS', order: 5 };
+    if (gen === 'ladies')     return { group: 'EVA LADIES',         order: 2 };
+    if (gen === 'kids_ladies')return { group: 'EVA KID LADIES',     order: 3 };
+    if (gen === 'gents')      return { group: 'EVA GENTS',          order: 4 };
+    if (gen === 'kids_gents') return { group: 'EVA KIDS GENTS',     order: 5 };
     return { group: 'EVA OTHER', order: 6 };
+  }
+  if (st === 'injection') {
+    if (gen === 'ladies')     return { group: 'INJECTION LADIES',     order: 12 };
+    if (gen === 'kids_ladies')return { group: 'INJECTION KID LADIES', order: 13 };
+    if (gen === 'gents')      return { group: 'INJECTION GENTS',      order: 14 };
+    if (gen === 'kids_gents') return { group: 'INJECTION KIDS GENTS', order: 15 };
+    return { group: 'INJECTION OTHER', order: 16 };
   }
   return { group: 'OTHER', order: 99 };
 }
@@ -702,7 +709,9 @@ const handleExportMatrixExcel = async () => {
   // ─── Sort categories ────────────────────────────────────────────
   const categoryOrder = [
     "EVA LADIES", "EVA GENTS", "EVA KID LADIES", "EVA KIDS GENTS",
-    "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS", "OTHER"
+    "PU LADIES", "PU GENTS", "PU KID LADIES", "PU KIDS GENTS",
+    "INJECTION LADIES", "INJECTION GENTS", "INJECTION KID LADIES", "INJECTION KIDS GENTS", "INJECTION OTHER",
+    "OTHER"
   ];
   const sortedCategories = Object.entries(groupedByCategory).sort(([a], [b]) => {
     const idxA = categoryOrder.indexOf(a);

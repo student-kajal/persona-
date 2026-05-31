@@ -110,7 +110,7 @@ const PDFGenerator = () => {
                     <option value="">All</option>
                     <option value="pu">PU</option>
                     <option value="eva">EVA</option>
-                    <option value="new">NEW</option>
+                    <option value="injection">INJECTION</option>
                   </select>
                 </div>
                 

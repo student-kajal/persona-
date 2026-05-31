@@ -27,11 +27,18 @@ function getVirtualGroup(stockType, gender) {
     return { group: 'EVA OTHER', order: 6 };
   }
   if (st === 'pu') {
-    if (gen === 'ladies')     return { group: 'PU LADIES',      order: 7 };
-    if (gen === 'kids_ladies')return { group: 'PU KID LADIES',  order: 8 };
-    if (gen === 'gents')      return { group: 'PU GENTS',       order: 9 };
-    if (gen === 'kids_gents') return { group: 'PU KIDS GENTS',  order: 10 };
+    if (gen === 'ladies')     return { group: 'PU LADIES',          order: 7 };
+    if (gen === 'kids_ladies')return { group: 'PU KID LADIES',      order: 8 };
+    if (gen === 'gents')      return { group: 'PU GENTS',           order: 9 };
+    if (gen === 'kids_gents') return { group: 'PU KIDS GENTS',      order: 10 };
     return { group: 'PU OTHER', order: 11 };
+  }
+  if (st === 'injection') {
+    if (gen === 'ladies')     return { group: 'INJECTION LADIES',     order: 12 };
+    if (gen === 'kids_ladies')return { group: 'INJECTION KID LADIES', order: 13 };
+    if (gen === 'gents')      return { group: 'INJECTION GENTS',      order: 14 };
+    if (gen === 'kids_gents') return { group: 'INJECTION KIDS GENTS', order: 15 };
+    return { group: 'INJECTION OTHER', order: 16 };
   }
   return { group: 'OTHER', order: 99 };
 }
@@ -56,14 +63,18 @@ const PAGE_LIMIT = 50;
 
 // ─── category meta ────────────────────────────────────────────────────────────
 const CAT_META = {
-  'eva-ladies':      { label: 'EVA LADIES',      bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6' },
-  'eva-gents':       { label: 'EVA GENTS',       bg: '#e0e7ff', color: '#4338ca', dot: '#6366f1' },
-  'eva-kids_ladies': { label: 'EVA KID LADIES',  bg: '#cffafe', color: '#0e7490', dot: '#06b6d4' },
-  'eva-kids_gents':  { label: 'EVA KIDS GENTS',  bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
-  'pu-ladies':       { label: 'PU LADIES',       bg: '#fce7f3', color: '#9d174d', dot: '#ec4899' },
-  'pu-gents':        { label: 'PU GENTS',        bg: '#ede9fe', color: '#5b21b6', dot: '#8b5cf6' },
-  'pu-kids_ladies':  { label: 'PU KID LADIES',   bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
-  'pu-kids_gents':   { label: 'PU KIDS GENTS',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
+  'eva-ladies':            { label: 'EVA LADIES',          bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6' },
+  'eva-gents':             { label: 'EVA GENTS',           bg: '#e0e7ff', color: '#4338ca', dot: '#6366f1' },
+  'eva-kids_ladies':       { label: 'EVA KID LADIES',      bg: '#cffafe', color: '#0e7490', dot: '#06b6d4' },
+  'eva-kids_gents':        { label: 'EVA KIDS GENTS',      bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
+  'pu-ladies':             { label: 'PU LADIES',           bg: '#fce7f3', color: '#9d174d', dot: '#ec4899' },
+  'pu-gents':              { label: 'PU GENTS',            bg: '#ede9fe', color: '#5b21b6', dot: '#8b5cf6' },
+  'pu-kids_ladies':        { label: 'PU KID LADIES',       bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
+  'pu-kids_gents':         { label: 'PU KIDS GENTS',       bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
+  'injection-ladies':      { label: 'INJECTION LADIES',    bg: '#ecfdf5', color: '#065f46', dot: '#34d399' },
+  'injection-gents':       { label: 'INJECTION GENTS',     bg: '#f0fdf4', color: '#166534', dot: '#4ade80' },
+  'injection-kids_ladies': { label: 'INJECTION KID LADIES',bg: '#fefce8', color: '#713f12', dot: '#facc15' },
+  'injection-kids_gents':  { label: 'INJECTION KIDS GENTS',bg: '#fff7ed', color: '#7c2d12', dot: '#fb923c' },
 };
 function getCat(stockType, gender) {
   return CAT_META[`${(stockType || '').toLowerCase()}-${(gender || '').toLowerCase()}`]
@@ -362,8 +373,12 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
         groupedByCategory[gk][ak].variants.push(p);
       });
 
-      const categoryOrder = ['EVA LADIES','EVA GENTS','EVA KID LADIES','EVA KIDS GENTS',
-                              'PU LADIES','PU GENTS','PU KID LADIES','PU KIDS GENTS','OTHER'];
+      const categoryOrder = [
+        'EVA LADIES','EVA GENTS','EVA KID LADIES','EVA KIDS GENTS',
+        'PU LADIES','PU GENTS','PU KID LADIES','PU KIDS GENTS',
+        'INJECTION LADIES','INJECTION GENTS','INJECTION KID LADIES','INJECTION KIDS GENTS','INJECTION OTHER',
+        'OTHER',
+      ];
       const sortedCategories = Object.entries(groupedByCategory).sort(([a],[b]) => {
         const ia = categoryOrder.indexOf(a), ib = categoryOrder.indexOf(b);
         if (ia !== -1 && ib !== -1) return ia - ib;

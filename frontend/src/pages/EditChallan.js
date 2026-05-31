@@ -872,6 +872,7 @@ import {
  // FaExclamationTriangle,
 } from 'react-icons/fa';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../utils/api';
 import './ChallanForm.css';
 
@@ -896,8 +897,9 @@ function SuggestionPortal({ anchorEl, children }) {
 }
 
 const EditChallan = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id }       = useParams();
+  const navigate     = useNavigate();
+  const queryClient  = useQueryClient();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1427,6 +1429,9 @@ if (hasNegativeStock) {
       if (!response.data.success) {
         throw new Error(response.data.error || 'Failed to update challan');
       }
+
+      // Force products table to refetch so stock shows updated immediately
+      queryClient.invalidateQueries({ queryKey: ['optimized-products'] });
 
       toast.success('Challan updated successfully! 🎉', {
         autoClose: 3000,
