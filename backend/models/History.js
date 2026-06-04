@@ -24,4 +24,10 @@ const historySchema = new Schema({
   note: { type: String }
 });
 
- module.exports = mongoose.model('History', historySchema);
+// Compound index for the stock-recalculation aggregation in getOptimizedProducts
+// and challanController: { product, action } is the primary filter pattern.
+historySchema.index({ product: 1, action: 1 });
+// TTL-free descending timestamp index for history-list queries.
+historySchema.index({ timestamp: -1 });
+
+module.exports = mongoose.model('History', historySchema);

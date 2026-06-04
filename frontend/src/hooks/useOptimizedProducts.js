@@ -17,9 +17,10 @@ export function useOptimizedProducts(params = {}) {
     },
     // Keep previous page data visible while the next page is loading.
     placeholderData: (prev) => prev,
-    // staleTime: 0 → data is always considered stale, so any page visit triggers a
-    // fresh fetch. This ensures challan / salary changes are reflected immediately.
     staleTime: 0,
     refetchOnWindowFocus: true,
+    // Auto-refresh every 45 s so stock stays current even without navigation.
+    refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
   });
 }

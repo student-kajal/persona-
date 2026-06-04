@@ -1898,23 +1898,36 @@ const handleSubmit = async (e) => {
   placeholder="Enter article name..."
   onFocus={() => setShowArticleSuggestions(true)}
   onKeyDown={(e) => {
-    if (!articleSuggestions.length) return;
-    
+    const dropdownOpen = articleSuggestions.length > 0 && showArticleSuggestions;
+
+    if (!dropdownOpen) {
+      if (e.key === 'Enter') handleSubmit(e);
+      return;
+    }
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedSuggestionIndex((prev) => 
+      setSelectedSuggestionIndex(prev =>
         prev < articleSuggestions.length - 1 ? prev + 1 : prev
       );
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedSuggestionIndex((prev) => 
-        prev > 0 ? prev - 1 : 0
-      );
-    } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
-      e.preventDefault();
-      handleArticleChoose(articleSuggestions[selectedSuggestionIndex]);
-    } else if (e.key === 'Enter') {
-      handleSubmit(e); // Normal form submit if no selection
+      setSelectedSuggestionIndex(prev => (prev > 0 ? prev - 1 : 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      // Auto-pick: navigated item or first suggestion
+      const chosen =
+        selectedSuggestionIndex >= 0
+          ? articleSuggestions[selectedSuggestionIndex]
+          : articleSuggestions[0];
+      if (e.key === 'Enter') e.preventDefault(); // don't submit form
+      // Tab: don't preventDefault — focus moves naturally to next field
+      setForm(f => ({ ...f, article: chosen }));
+      setArticleSuggestions([]);
+      setShowArticleSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+    } else if (e.key === 'Escape') {
+      setShowArticleSuggestions(false);
+      setSelectedSuggestionIndex(-1);
     }
   }}
 />

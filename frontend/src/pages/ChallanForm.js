@@ -340,10 +340,12 @@ import './ChallanForm.css';
 function SuggestionPortal({ anchorEl, children }) {
   if (!anchorEl) return null;
   const rect = anchorEl.getBoundingClientRect();
+  // position:fixed uses viewport coords directly — no scrollY/scrollX needed.
+  // This works correctly inside scrollable tables / overflow containers.
   const style = {
-    position: 'absolute',
-    top: rect.bottom + window.scrollY,
-    left: rect.left + window.scrollX,
+    position: 'fixed',
+    top: rect.bottom,
+    left: rect.left,
     width: rect.width,
     maxHeight: 240,
     overflowY: 'auto',
@@ -743,6 +745,7 @@ if (hasNegativeStock) {
 
   const [articleSuggestions, setArticleSuggestions] = useState({});
   const [showArticleDropdown, setShowArticleDropdown] = useState({});
+  const [selectedArticleIdx, setSelectedArticleIdx] = useState({});
   const fetchArticleSuggestions = async (search, index) => {
     if (!search) { setArticleSuggestions(p => ({ ...p, [index]: [] })); return; }
     try {
@@ -787,8 +790,8 @@ if (hasNegativeStock) {
                   <div style={{ position: "relative" }}>
                     <input type="text" className="form-control" value={formData.partyName}
                       onChange={(e) => { const val = e.target.value.toUpperCase(); setFormData(p => ({ ...p, partyName: val })); fetchPartyNames(val); }}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                      onFocus={() => { if (partySuggestions.length) setShowSuggestions(true); }}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      onFocus={() => { if (formData.partyName) fetchPartyNames(formData.partyName); else setShowSuggestions(true); }}
                       placeholder="Enter party name" required />
                     {showSuggestions && partySuggestions.length > 0 && (
                       <ul style={{ position: "absolute", top: "100%", left: 0, width: "100%", maxHeight: "200px", overflowY: "auto", border: "1px solid #ddd", background: "#fff", zIndex: 1000, listStyle: "none", padding: 0, margin: 0, borderRadius: "0 0 8px 8px", boxShadow: "0 4px 8px rgba(0,0,0,0.1)" }}>
@@ -843,9 +846,32 @@ if (hasNegativeStock) {
                                 ref={(el) => (articleInputRefs.current[index] = el)}
                                 type="text" className="form-control form-control-sm" value={item.article}
                                 onChange={(e) => { handleItemChange(index, e); fetchArticleSuggestions(e.target.value.toUpperCase(), index); }}
-                                onBlur={() => setTimeout(() => setShowArticleDropdown(prev => ({ ...prev, [index]: false })), 200)}
-                                onFocus={() => { if (articleSuggestions[index]?.length) setShowArticleDropdown(prev => ({ ...prev, [index]: true })); }}
+                                onBlur={() => setTimeout(() => setShowArticleDropdown(prev => ({ ...prev, [index]: false })), 150)}
+                                onFocus={() => { if (item.article) fetchArticleSuggestions(item.article, index); }}
                                 name="article" placeholder="Enter article" autoComplete="off" required
+                                onKeyDown={(e) => {
+                                  const suggs = articleSuggestions[index];
+                                  const dropOpen = showArticleDropdown[index] && suggs?.length > 0;
+                                  if (!dropOpen) return;
+                                  if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    setSelectedArticleIdx(prev => ({ ...prev, [index]: Math.min((prev[index] ?? -1) + 1, suggs.length - 1) }));
+                                  } else if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    setSelectedArticleIdx(prev => ({ ...prev, [index]: Math.max((prev[index] ?? 0) - 1, 0) }));
+                                  } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                    const idx = selectedArticleIdx[index] ?? -1;
+                                    const chosen = idx >= 0 ? suggs[idx] : suggs[0];
+                                    if (e.key === 'Enter') e.preventDefault();
+                                    const ev = { target: { name: 'article', value: chosen } };
+                                    handleItemChange(index, ev);
+                                    setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                    setSelectedArticleIdx(prev => ({ ...prev, [index]: -1 }));
+                                    fetchArticleVariants(chosen, index, true);
+                                  } else if (e.key === 'Escape') {
+                                    setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                  }
+                                }}
                               />
                               {showArticleDropdown[index] && articleSuggestions[index]?.length > 0 && (
                                 <SuggestionPortal anchorEl={articleInputRefs.current[index]}>
@@ -856,11 +882,17 @@ if (hasNegativeStock) {
                                             const ev = { target: { name: "article", value: art } };
                                             handleItemChange(index, ev);
                                             setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                            setSelectedArticleIdx(prev => ({ ...prev, [index]: -1 }));
                                             fetchArticleVariants(art, index, true);
                                           }}
-                                          style={{ padding: "10px 12px", cursor: "pointer", borderBottom: i < articleSuggestions[index].length - 1 ? "1px solid #f0f0f0" : "none" }}
-                                          onMouseOver={e => e.currentTarget.style.background = "#f8f9fa"}
-                                          onMouseOut={e => e.currentTarget.style.background = "#fff"}
+                                          style={{
+                                            padding: "10px 12px", cursor: "pointer",
+                                            borderBottom: i < articleSuggestions[index].length - 1 ? "1px solid #f0f0f0" : "none",
+                                            background: (selectedArticleIdx[index] ?? -1) === i ? "#e8f0fe" : "#fff",
+                                            color: (selectedArticleIdx[index] ?? -1) === i ? "#1e40af" : "inherit",
+                                          }}
+                                          onMouseOver={e => { if ((selectedArticleIdx[index] ?? -1) !== i) e.currentTarget.style.background = "#f8f9fa"; }}
+                                          onMouseOut={e => { if ((selectedArticleIdx[index] ?? -1) !== i) e.currentTarget.style.background = "#fff"; }}
                                       >
                                         {art}
                                       </li>

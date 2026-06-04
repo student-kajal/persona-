@@ -880,10 +880,11 @@ import './ChallanForm.css';
 function SuggestionPortal({ anchorEl, children }) {
   if (!anchorEl) return null;
   const rect = anchorEl.getBoundingClientRect();
+  // position:fixed uses viewport coords — works correctly inside scrollable tables.
   const style = {
-    position: 'absolute',
-    top: rect.bottom + window.scrollY,
-    left: rect.left + window.scrollX,
+    position: 'fixed',
+    top: rect.bottom,
+    left: rect.left,
     width: rect.width,
     maxHeight: 240,
     overflowY: 'auto',
@@ -1460,6 +1461,7 @@ if (hasNegativeStock) {
   const totals = calculateTotals();
   const [articleSuggestions, setArticleSuggestions] = useState({});
   const [showArticleDropdown, setShowArticleDropdown] = useState({});
+  const [selectedArticleIdx, setSelectedArticleIdx] = useState({});
 
   const fetchArticleSuggestions = async (search, index) => {
     if (!search) {
@@ -1663,21 +1665,39 @@ if (hasNegativeStock) {
                                       ...prev,
                                       [index]: false,
                                     })),
-                                  200,
+                                  150,
                                 )
                               }
                               onFocus={() => {
-                                if (articleSuggestions[index]?.length) {
-                                  setShowArticleDropdown((prev) => ({
-                                    ...prev,
-                                    [index]: true,
-                                  }));
-                                }
+                                if (item.article) fetchArticleSuggestions(item.article, index);
                               }}
                               name="article"
                               placeholder="Enter article"
                               autoComplete="off"
                               required
+                              onKeyDown={(e) => {
+                                const suggs = articleSuggestions[index];
+                                const dropOpen = showArticleDropdown[index] && suggs?.length > 0;
+                                if (!dropOpen) return;
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setSelectedArticleIdx(prev => ({ ...prev, [index]: Math.min((prev[index] ?? -1) + 1, suggs.length - 1) }));
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setSelectedArticleIdx(prev => ({ ...prev, [index]: Math.max((prev[index] ?? 0) - 1, 0) }));
+                                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                  const idx = selectedArticleIdx[index] ?? -1;
+                                  const chosen = idx >= 0 ? suggs[idx] : suggs[0];
+                                  if (e.key === 'Enter') e.preventDefault();
+                                  const ev = { target: { name: 'article', value: chosen } };
+                                  handleItemChange(index, ev);
+                                  setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                  setSelectedArticleIdx(prev => ({ ...prev, [index]: -1 }));
+                                  fetchArticleVariants(chosen, index, true);
+                                } else if (e.key === 'Escape') {
+                                  setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                }
+                              }}
                             />
                             {showArticleDropdown[index] &&
                               articleSuggestions[index]?.length > 0 && (
@@ -1696,41 +1716,21 @@ if (hasNegativeStock) {
                                         <li
                                           key={i}
                                           onMouseDown={() => {
-                                            const ev = {
-                                              target: {
-                                                name: 'article',
-                                                value: art,
-                                              },
-                                            };
+                                            const ev = { target: { name: 'article', value: art } };
                                             handleItemChange(index, ev);
-                                            setShowArticleDropdown((prev) => ({
-                                              ...prev,
-                                              [index]: false,
-                                            }));
-                                            fetchArticleVariants(
-                                              art,
-                                              index,
-                                              true,
-                                            );
+                                            setShowArticleDropdown(prev => ({ ...prev, [index]: false }));
+                                            setSelectedArticleIdx(prev => ({ ...prev, [index]: -1 }));
+                                            fetchArticleVariants(art, index, true);
                                           }}
                                           style={{
                                             padding: '10px 12px',
                                             cursor: 'pointer',
-                                            borderBottom:
-                                              i <
-                                              articleSuggestions[index].length -
-                                                1
-                                                ? '1px solid #f0f0f0'
-                                                : 'none',
+                                            borderBottom: i < articleSuggestions[index].length - 1 ? '1px solid #f0f0f0' : 'none',
+                                            background: (selectedArticleIdx[index] ?? -1) === i ? '#e8f0fe' : '#fff',
+                                            color: (selectedArticleIdx[index] ?? -1) === i ? '#1e40af' : 'inherit',
                                           }}
-                                          onMouseOver={(e) => {
-                                            e.currentTarget.style.background =
-                                              '#f8f9fa';
-                                          }}
-                                          onMouseOut={(e) => {
-                                            e.currentTarget.style.background =
-                                              '#fff';
-                                          }}
+                                          onMouseOver={e => { if ((selectedArticleIdx[index] ?? -1) !== i) e.currentTarget.style.background = '#f8f9fa'; }}
+                                          onMouseOut={e => { if ((selectedArticleIdx[index] ?? -1) !== i) e.currentTarget.style.background = '#fff'; }}
                                         >
                                           {art}
                                         </li>

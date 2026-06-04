@@ -632,13 +632,34 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {isFetching && !isLoading && (
-            <span style={{ fontSize: 11, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <style>{`@keyframes gpPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#60a5fa', animation: 'gpPulse 1s infinite' }} />
-              Refreshing…
-            </span>
-          )}
+          <style>{`
+            @keyframes gpPulse{0%,100%{opacity:1}50%{opacity:.3}}
+            @keyframes gpSpin{to{transform:rotate(360deg)}}
+          `}</style>
+
+          {/* Refresh button — always visible */}
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Refresh stock data"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 13px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              border: isFetching ? '1.5px solid #475569' : '1.5px solid #38bdf8',
+              background: isFetching ? 'rgba(71,85,105,.25)' : 'rgba(56,189,248,.15)',
+              color: isFetching ? '#94a3b8' : '#38bdf8',
+              cursor: isFetching ? 'not-allowed' : 'pointer',
+              transition: 'all .15s',
+            }}
+          >
+            <span style={{
+              display: 'inline-block', width: 13, height: 13,
+              border: '2px solid currentColor', borderTopColor: 'transparent',
+              borderRadius: '50%',
+              animation: isFetching ? 'gpSpin .7s linear infinite' : 'none',
+            }} />
+            {isFetching && !isLoading ? 'Updating…' : 'Refresh Stock'}
+          </button>
           {someSelected && (
             <span style={{
               display: 'flex', alignItems: 'center', gap: 6,
@@ -807,8 +828,11 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
       {/* ── grouped table ───────────────────────────────────────────────── */}
       {!isLoading && !isError && products.length > 0 && (
         <div style={{
-          border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden',
+          border: isFetching ? '1.5px solid #38bdf8' : '1px solid #e2e8f0',
+          borderRadius: 12, overflow: 'hidden',
           boxShadow: '0 2px 16px rgba(0,0,0,.06)',
+          transition: 'border-color .3s',
+          opacity: isFetching ? 0.82 : 1,
         }}>
           <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 620 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980, fontSize: 13 }}>
