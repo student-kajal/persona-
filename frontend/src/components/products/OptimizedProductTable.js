@@ -549,15 +549,37 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
         }
       };
 
+      const CAT_SUB_FILL = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFBDD7EE' } };
+      const CAT_SUB_FONT = { bold:true, size:12, name:'Arial', color:{ argb:'FF1A237E' } };
+
       let firstCat = true;
       for (const [gName, ag] of sortedCategories) {
         const blocks = buildBlocks(ag); if (!blocks.length) continue;
         const cols = packCols(blocks);
+
+        // Category total — negatives treated as 0
+        const catTotal = Object.values(ag).reduce((sum, grp) =>
+          sum + grp.variants.reduce((s, v) => s + Math.max(0, v.cartons || 0), 0), 0);
+
         for (let i=0; i<cols.length; i+=COLS_PER_PAGE) {
           if (!firstCat || i>0) ws.addRow([]);
           renderPageSet(cols.slice(i,i+COLS_PER_PAGE), gName);
           firstCat = false;
         }
+
+        // Category subtotal row
+        const stRow = ws.addRow([]);
+        stRow.height = 18;
+        const stCols = Math.max(ws.columnCount, 4);
+        for (let c = 1; c <= stCols; c++) {
+          const gc = stRow.getCell(c);
+          gc.fill = CAT_SUB_FILL;
+          gc.border = thin;
+          gc.alignment = { horizontal:'center', vertical:'middle' };
+          gc.font = CAT_SUB_FONT;
+        }
+        stRow.getCell(1).value = `${gName} TOTAL: ${catTotal} Cartons`;
+        stRow.getCell(1).alignment = { horizontal:'left', vertical:'middle' };
       }
 
       // Column widths
