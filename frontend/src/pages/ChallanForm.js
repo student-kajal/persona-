@@ -364,6 +364,8 @@ const ChallanForm = () => {
   const [saving, setSaving] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadingProductsPDF, setDownloadingProductsPDF] = useState(false);
+  const [sharingChallanPDF, setSharingChallanPDF] = useState(false);
+  const [sharingCataloguePDF, setSharingCataloguePDF] = useState(false);
   const [articleVariants, setArticleVariants] = useState({});
   const [loadingVariants, setLoadingVariants] = useState({});
   const [stockAvailability, setStockAvailability] = useState({});
@@ -636,6 +638,32 @@ useEffect(() => {
     } finally { setDownloadingProductsPDF(false); }
   };
 
+  const shareViaWhatsApp = async (type, challanId, invoiceNo) => {
+    const isChallan = type === 'challan';
+    const setSharing = isChallan ? setSharingChallanPDF : setSharingCataloguePDF;
+    const apiUrl = isChallan ? `/challan-pdf/${challanId}` : `/challan-pdf/${challanId}/products`;
+    const safeNo = invoiceNo.replace(/\//g, '-');
+    const fname  = isChallan ? `challan-${safeNo}.pdf` : `catalogue-${safeNo}.pdf`;
+    setSharing(true);
+    try {
+      const res  = await api.get(apiUrl, { responseType: 'blob', timeout: 60000 });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const file = new File([blob], fname, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: fname, text: `Invoice: ${invoiceNo}` });
+      } else {
+        // Desktop fallback — download + hint
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.info('PDF downloaded. Attach it manually in WhatsApp.');
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') toast.error('Share failed: ' + err.message);
+    } finally { setSharing(false); }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -767,12 +795,27 @@ if (hasNegativeStock) {
 
           {lastCreatedChallanId && (
             <div className="pdf-actions">
-              <div className="btn-group" role="group">
-                <button type="button" className="btn btn-outline-primary" onClick={() => downloadChallanPDF(lastCreatedChallanId, formData.invoiceNo)} disabled={downloadingPDF}>
-                  {downloadingPDF ? (<><FaSpinner className="fa-spin me-1" />Downloading...</>) : (<><FaFilePdf className="me-1" />Download Challan PDF</>)}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {/* Challan PDF */}
+                <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => downloadChallanPDF(lastCreatedChallanId, formData.invoiceNo)} disabled={downloadingPDF}>
+                  {downloadingPDF ? <><FaSpinner className="fa-spin me-1" />...</> : <><FaFilePdf className="me-1" />Challan PDF</>}
                 </button>
-                <button type="button" className="btn btn-outline-success" onClick={() => downloadProductsPDF(lastCreatedChallanId, formData.invoiceNo)} disabled={downloadingProductsPDF}>
-                  {downloadingProductsPDF ? (<><FaSpinner className="fa-spin me-1" />Downloading...</>) : (<><FaImages className="me-1" />Download Products PDF</>)}
+                <button type="button" onClick={() => shareViaWhatsApp('challan', lastCreatedChallanId, formData.invoiceNo)} disabled={sharingChallanPDF}
+                  style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600,
+                    background: sharingChallanPDF ? '#ccc' : '#25D366', color:'#fff', border:'none', cursor: sharingChallanPDF ? 'not-allowed' : 'pointer' }}>
+                  {sharingChallanPDF ? <FaSpinner className="fa-spin" /> : '🟢'} WA
+                </button>
+
+                <span style={{ borderLeft: '1px solid #dee2e6', margin: '0 2px' }} />
+
+                {/* Catalogue PDF */}
+                <button type="button" className="btn btn-outline-success btn-sm" onClick={() => downloadProductsPDF(lastCreatedChallanId, formData.invoiceNo)} disabled={downloadingProductsPDF}>
+                  {downloadingProductsPDF ? <><FaSpinner className="fa-spin me-1" />...</> : <><FaImages className="me-1" />Catalogue PDF</>}
+                </button>
+                <button type="button" onClick={() => shareViaWhatsApp('catalogue', lastCreatedChallanId, formData.invoiceNo)} disabled={sharingCataloguePDF}
+                  style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:600,
+                    background: sharingCataloguePDF ? '#ccc' : '#25D366', color:'#fff', border:'none', cursor: sharingCataloguePDF ? 'not-allowed' : 'pointer' }}>
+                  {sharingCataloguePDF ? <FaSpinner className="fa-spin" /> : '🟢'} WA
                 </button>
               </div>
               <div className="mt-2"><small className="text-muted">✅ Last created: Invoice #{formData.invoiceNo}</small></div>
@@ -989,10 +1032,20 @@ if (hasNegativeStock) {
               {lastCreatedChallanId && !saving && (
                 <>
                   <button type="button" className="btn btn-outline-primary" onClick={() => downloadChallanPDF(lastCreatedChallanId, formData.invoiceNo)} disabled={downloadingPDF}>
-                    {downloadingPDF ? (<><FaSpinner className="fa-spin me-1" />Downloading...</>) : (<><FaFilePdf className="me-1" />Download Challan</>)}
+                    {downloadingPDF ? <><FaSpinner className="fa-spin me-1" />...</> : <><FaFilePdf className="me-1" />Challan PDF</>}
+                  </button>
+                  <button type="button" onClick={() => shareViaWhatsApp('challan', lastCreatedChallanId, formData.invoiceNo)} disabled={sharingChallanPDF}
+                    style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:6, fontSize:13, fontWeight:600,
+                      background: sharingChallanPDF ? '#aaa' : '#25D366', color:'#fff', border:'none', cursor: sharingChallanPDF ? 'not-allowed' : 'pointer' }}>
+                    {sharingChallanPDF ? <FaSpinner className="fa-spin" /> : '🟢'} WA Challan
                   </button>
                   <button type="button" className="btn btn-outline-success" onClick={() => downloadProductsPDF(lastCreatedChallanId, formData.invoiceNo)} disabled={downloadingProductsPDF}>
-                    {downloadingProductsPDF ? (<><FaSpinner className="fa-spin me-1" />Downloading...</>) : (<><FaImages className="me-1" />Download Products</>)}
+                    {downloadingProductsPDF ? <><FaSpinner className="fa-spin me-1" />...</> : <><FaImages className="me-1" />Catalogue PDF</>}
+                  </button>
+                  <button type="button" onClick={() => shareViaWhatsApp('catalogue', lastCreatedChallanId, formData.invoiceNo)} disabled={sharingCataloguePDF}
+                    style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:6, fontSize:13, fontWeight:600,
+                      background: sharingCataloguePDF ? '#aaa' : '#25D366', color:'#fff', border:'none', cursor: sharingCataloguePDF ? 'not-allowed' : 'pointer' }}>
+                    {sharingCataloguePDF ? <FaSpinner className="fa-spin" /> : '🟢'} WA Catalogue
                   </button>
                 </>
               )}

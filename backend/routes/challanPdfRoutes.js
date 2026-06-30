@@ -309,6 +309,20 @@ router.get('/:id/products', async (req, res) => {
   return m;
 }, {});
 
+    // Fill missing images: for any group whose fetched variants had no image,
+    // look up ANY product with that article that does have an image.
+    await Promise.all(
+      Object.values(grouped).map(async (g) => {
+        if (g.image) return;
+        const imgProd = await Product.findOne({
+          article: g.article,
+          image: { $exists: true, $ne: null, $ne: '' },
+          isDeleted: { $ne: true }
+        }).select('image').lean();
+        if (imgProd?.image) g.image = imgProd.image;
+      })
+    );
+
     const groups = Object.entries(grouped);
 
     /* ---------------- PDF SETUP ---------------- */
@@ -363,24 +377,26 @@ router.get('/:id/products', async (req, res) => {
       if (g.image) {
         try {
           const img = await axios.get(g.image, { responseType: 'arraybuffer' });
-          const buf = Buffer.from(img.data);
+          const buf = Buffer.from(img.data, 'binary');
 
           const imgObj = doc.openImage(buf);
-          const scale = Math.min(
-            (LEFT_W - 20) / imgObj.width,
-            (leftH - 20) / imgObj.height
-          );
+          const iw = imgObj.width;
+          const ih = imgObj.height;
 
-          const sw = imgObj.width * scale;
-          const sh = imgObj.height * scale;
+          const pad = 10;
+          const cw = LEFT_W - pad * 2;
+          const ch = leftH - pad * 2;
 
-          const dx = 10 + (LEFT_W - sw) / 2;
-          const dy = leftY + (leftH - sh) / 2;
+          const scale = Math.min(cw / iw, ch / ih);
+          const sw = iw * scale;
+          const sh = ih * scale;
+
+          const dx = pad + (cw - sw) / 2;
+          const dy = leftY + pad + (ch - sh) / 2;
 
           doc.image(buf, dx, dy, { width: sw, height: sh });
-
         } catch (err) {
-          console.log("Image load failed");
+          console.error('Catalogue image load error:', err.message);
         }
       }
 
