@@ -95,10 +95,13 @@ export default function SalaryEntryEdit() {
       setImageSaving(true);
       const formData = new FormData();
       formData.append("image", imageFile);
-      formData.append("article", entry.article);
+      // formData.append("article", entry.article);
 
-      // Do NOT set Content-Type manually — axios sets multipart/form-data with boundary automatically
-      const res = await api.post("/upload/article-image", formData);
+      // // Do NOT set Content-Type manually — axios sets multipart/form-data with boundary automatically
+      // const res = await api.post("/upload/article-image", formData);
+      formData.append("productId", entry.product);
+
+const res = await api.put("/products/update-article-image", formData);
 
       if (res.data.success) {
         setCurrentImage(res.data.imageUrl);
