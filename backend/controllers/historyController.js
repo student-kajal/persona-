@@ -7,7 +7,9 @@ const Challan = require('../models/Challan');
 
 const SalaryEntry = require('../models/SalaryEntry');
 
-
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 
 exports.getHistory = async (req, res) => {
@@ -47,7 +49,9 @@ exports.getHistory = async (req, res) => {
     const orClauses = [];
 
     if (search.trim()) {
-      const regex = new RegExp(search.trim(), 'i');
+    //  const regex = new RegExp(search.trim(), 'i');
+    const safeSearch = escapeRegex(search.trim());
+const regex = new RegExp(safeSearch, 'i');
 
       // 🔥 Article / color / size search via Product collection
       const productIds = await Product.find({
@@ -240,7 +244,11 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
     
     if (!article) return res.status(400).json({ success: false, error: 'article required' });
 
-    const articleRegex = new RegExp(`^${article}$`, 'i');
+    //const articleRegex = new RegExp(`^${article}$`, 'i');
+    const articleRegex = new RegExp(
+  `^${escapeRegex(article.trim())}$`,
+  "i"
+);
     const genderRegex = gender ? new RegExp(`^${gender}$`, 'i') : null;
 
     await session.withTransaction(async () => {
@@ -249,6 +257,20 @@ exports.permanentDeleteArticleAndResetSalaries = async (req, res) => {
       if (gender) productQuery.gender = genderRegex;
       if (size) productQuery.size = size;
       if (color) productQuery.color = new RegExp(`^${color}$`, 'i');
+
+      console.log("Received:", {
+  article,
+  gender,
+  size,
+  color
+});
+
+console.log("Query:", productQuery);
+const products = await Product.find({
+  article: /MADAM/i
+}).select("article gender size color");
+
+console.log("DB Products:", products);
 
       const productsToDelete = await Product.find(productQuery).session(session);
       
@@ -372,7 +394,11 @@ exports.getPageOfArticle = async (req, res) => {
     // 2) Target record (latest history for this article)
     const target = await History.findOne({
       ...baseFilter,
-      articleText: new RegExp(`^${article}$`, 'i'),  // ya exact match field
+    //  articleText: new RegExp(`^${article}$`, 'i'),  // ya exact match field
+    articleText: new RegExp(
+  `^${escapeRegex(String(article).trim())}$`,
+  'i'
+),
     })
       .sort({ timestamp: -1 })   // same sort as main listing
       .lean();
