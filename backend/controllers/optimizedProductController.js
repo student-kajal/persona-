@@ -30,7 +30,9 @@ function splitParam(value, transform) {
   if (!value) return [];
   return value.split(',').map(v => transform ? transform(v.trim()) : v.trim()).filter(Boolean);
 }
-
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 // Builds the MongoDB $match query from request query parameters.
 // Supports multi-value comma-separated filters for every field.
 function buildMatchQuery(query) {
@@ -43,15 +45,26 @@ function buildMatchQuery(query) {
 
   const match = { isDeleted: false };
 
+  // if (search && search.trim()) {
+  //   match.$or = [
+  //     { article:   { $regex: search.trim(), $options: 'i' } },
+  //     { color:     { $regex: search.trim(), $options: 'i' } },
+  //     { series:    { $regex: search.trim(), $options: 'i' } },
+  //     { gender:    { $regex: search.trim(), $options: 'i' } },
+  //     { stockType: { $regex: search.trim(), $options: 'i' } },
+  //   ];
+  // }
   if (search && search.trim()) {
-    match.$or = [
-      { article:   { $regex: search.trim(), $options: 'i' } },
-      { color:     { $regex: search.trim(), $options: 'i' } },
-      { series:    { $regex: search.trim(), $options: 'i' } },
-      { gender:    { $regex: search.trim(), $options: 'i' } },
-      { stockType: { $regex: search.trim(), $options: 'i' } },
-    ];
-  }
+  const safeSearch = escapeRegex(search.trim());
+
+  match.$or = [
+    { article:   { $regex: safeSearch, $options: 'i' } },
+    { color:     { $regex: safeSearch, $options: 'i' } },
+    { series:    { $regex: safeSearch, $options: 'i' } },
+    { gender:    { $regex: safeSearch, $options: 'i' } },
+    { stockType: { $regex: safeSearch, $options: 'i' } },
+  ];
+}
 
   const articles   = splitParam(article);
   const types      = splitParam(stockType, s => s.toLowerCase());
