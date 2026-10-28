@@ -7,7 +7,7 @@ const historySchema = new Schema({
     type: String,
     enum: [
       'ADD', 'UPDATE', 'DELETE', 'CHALLAN_OUT', 'CHALLAN_IN',
-      'BULK_DELETE', 'BULK_RESTORE', 'IMPORT'
+      'BULK_DELETE', 'BULK_RESTORE', 'IMPORT', 'STOCK_RESET'
     ],
     required: true
   },
@@ -20,8 +20,11 @@ const historySchema = new Schema({
   updatedByName: { type: String }, // username (e.g. createdBy)
    articleText: { type: String, index: true },
   timestamp: { type: Date, default: Date.now },
-  
-  note: { type: String }
+
+  note: { type: String },
+  resetBatchId: { type: Schema.Types.ObjectId },
+  resetSnapshot: { type: Schema.Types.Mixed },
+  undoneAt: { type: Date }
 });
 
 // Compound index for the stock-recalculation aggregation in getOptimizedProducts
@@ -29,5 +32,6 @@ const historySchema = new Schema({
 historySchema.index({ product: 1, action: 1 });
 // TTL-free descending timestamp index for history-list queries.
 historySchema.index({ timestamp: -1 });
+historySchema.index({ resetBatchId: 1, action: 1 });
 
 module.exports = mongoose.model('History', historySchema);

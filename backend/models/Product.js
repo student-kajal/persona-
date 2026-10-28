@@ -49,6 +49,8 @@ const ProductSchema = new mongoose.Schema({
   totalPairs: { type: Number, default: 0 },         
 // Add this field to track total cartons already challaned out
   cartonsChallanedOut: { type: Number, default: 0 },
+  // Old challans before this time are retained for audit but ignored in current stock.
+  stockResetAt: { type: Date },
   
   createdBy: { type: String },
   noOfCrtn: { type: Number },

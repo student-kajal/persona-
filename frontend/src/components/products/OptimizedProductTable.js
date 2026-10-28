@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import api from '../../utils/api';
 import { useOptimizedProducts } from '../../hooks/useOptimizedProducts';
 import { useFilterOptions }      from '../../hooks/useFilterOptions';
+import { useAuth }               from '../../context/AuthContext';
 
 // ─── export helpers (same logic as old ProductListTable) ─────────────────────
 const triggerDownload = (blob, filename) => {
@@ -238,6 +239,7 @@ function GroupCheckbox({ variantIds, selected, onToggle }) {
 
 // ─── main component ──────────────────────────────────────────────────────────
 export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
+  const { user } = useAuth();
   const [page,            setPage]            = useState(1);
   const [searchInput,     setSearchInput]     = useState('');
   const [filters,         setFilters]         = useState({
@@ -251,6 +253,10 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
   const [excelLoading,     setExcelLoading]     = useState(false);
   const [pdfLoading,       setPdfLoading]       = useState(false);
   const [selected,         setSelected]         = useState([]);
+  const [resettingCategory, setResettingCategory] = useState('');
+  const [latestUndoableReset, setLatestUndoableReset] = useState(null);
+  const [undoingReset, setUndoingReset] = useState(false);
+  const canUndoStockReset = user?.role === 'admin' && user?.email?.toLowerCase() === 'kumarrahul614812@gmail.com';
 
   const debouncedSearch = useDebounce(searchInput, 400);
 
@@ -272,6 +278,13 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
 
   const { data, isLoading, isFetching, isError, error, refetch } = useOptimizedProducts(queryParams);
   const { data: optData } = useFilterOptions(filterQueryParams);
+
+  useEffect(() => {
+    if (!canUndoStockReset) return;
+    api.get('/products/reset-stock-category/undo')
+      .then(({ data: response }) => setLatestUndoableReset(response.reset))
+      .catch(() => setLatestUndoableReset(null));
+  }, [canUndoStockReset]);
 
   const products   = useMemo(() => data?.products   || [], [data]);
   const total      = data?.total      || 0;
@@ -337,6 +350,55 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
   const activeCount = useMemo(() =>
     Object.values(filters).reduce((s, v) => s + v.length, 0) + (searchInput.trim() ? 1 : 0),
     [filters, searchInput]);
+
+  const resetCategories = [
+    ['eva', 'all', 'All EVA'], ['pu', 'all', 'All PU'],
+    ['eva', 'ladies', 'EVA Ladies'], ['eva', 'gents', 'EVA Gents'],
+    ['eva', 'kids_ladies', 'EVA Kid Ladies'], ['eva', 'kids_gents', 'EVA Kids Gents'],
+    ['pu', 'ladies', 'PU Ladies'], ['pu', 'gents', 'PU Gents'],
+    ['pu', 'kids_ladies', 'PU Kid Ladies'], ['pu', 'kids_gents', 'PU Kids Gents'],
+    ['injection', 'all', 'All Injection'],
+    ['injection', 'ladies', 'Injection Ladies'], ['injection', 'gents', 'Injection Gents'],
+    ['injection', 'kids_ladies', 'Injection Kid Ladies'], ['injection', 'kids_gents', 'Injection Kids Gents'],
+  ];
+
+  const handleCategoryReset = useCallback(async (stockType, gender, label) => {
+    if (!window.confirm(`${label} ke sabhi cartons aur total pairs ko 0 karna hai? Pair/carton same rahega. Purana challan history safe rahega.`)) return;
+    const key = `${stockType}-${gender}`;
+    setResettingCategory(key);
+    try {
+      const { data } = await api.post('/products/reset-stock-category', {
+        stockType, gender, updatedByName: user?.name || user?.email || 'ADMIN'
+      });
+      if (canUndoStockReset) {
+        setLatestUndoableReset(data.resetBatchId ? { resetBatchId: data.resetBatchId, note: `${label} reset` } : null);
+      }
+      window.alert(`${label}: ${data.resetCount} product(s) reset to 0.`);
+      setSelected([]);
+      refetch();
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Stock reset nahi ho saka.');
+    } finally {
+      setResettingCategory('');
+    }
+  }, [canUndoStockReset, refetch, user]);
+
+  const handleUndoStockReset = useCallback(async () => {
+    if (!latestUndoableReset || !window.confirm('Last stock reset undo karke purana cartons aur total pairs restore karna hai?')) return;
+    setUndoingReset(true);
+    try {
+      const { data } = await api.post('/products/reset-stock-category/undo', {
+        resetBatchId: latestUndoableReset.resetBatchId
+      });
+      setLatestUndoableReset(null);
+      window.alert(`${data.restoredCount} product(s) ka purana stock restore ho gaya.`);
+      refetch();
+    } catch (err) {
+      window.alert(err.response?.data?.error || 'Stock reset undo nahi ho saka.');
+    } finally {
+      setUndoingReset(false);
+    }
+  }, [latestUndoableReset, refetch]);
 
   // ── fetch products for export ─────────────────────────────────────────────
   // If rows are selected: return only those from current page (fast, no API call).
@@ -621,7 +683,7 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
         includeImages: pdfExportType === 'withImage',
         showRate, showMRP,
         filters: {}
-      }, { responseType: 'blob', timeout: 60000 });
+      }, { responseType: 'blob', timeout: 180000 });
 
       triggerDownload(new Blob([response.data], { type: 'application/pdf' }), 'catalogue.pdf');
     } catch(err) {
@@ -708,6 +770,37 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
       </div>
 
       {/* ── search + filters ────────────────────────────────────────────── */}
+      {user?.role === 'admin' && (
+        <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 12, padding: '14px 18px', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#9a3412', marginBottom: 4 }}>Admin stock reset</div>
+          <div style={{ fontSize: 12, color: '#9a3412', marginBottom: 11 }}>Category reset se cartons aur total pairs 0 honge. Pair/Carton same rahega. History delete nahi hogi.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {canUndoStockReset && latestUndoableReset && (
+              <button onClick={handleUndoStockReset} disabled={undoingReset} style={{
+                padding: '6px 10px', borderRadius: 7, fontSize: 12, fontWeight: 650,
+                border: '1px solid #2563eb', background: '#eff6ff', color: '#1d4ed8',
+                cursor: undoingReset ? 'not-allowed' : 'pointer',
+              }}>
+                {undoingReset ? 'Undoing...' : 'Undo last reset'}
+              </button>
+            )}
+            {resetCategories.map(([stockType, gender, label]) => {
+              const key = `${stockType}-${gender}`;
+              const busy = resettingCategory === key;
+              return (
+                <button key={key} onClick={() => handleCategoryReset(stockType, gender, label)} disabled={Boolean(resettingCategory)} style={{
+                  padding: '6px 10px', borderRadius: 7, fontSize: 12, fontWeight: 650,
+                  border: '1px solid #ea580c', background: busy ? '#fed7aa' : '#fff', color: '#c2410c',
+                  cursor: resettingCategory ? 'not-allowed' : 'pointer', opacity: resettingCategory && !busy ? .55 : 1,
+                }}>
+                  {busy ? 'Resetting...' : `Reset ${label}`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{
         background: '#fff', borderRadius: 12, padding: '14px 18px', marginBottom: 16,
         border: '1px solid #e2e8f0', boxShadow: '0 1px 6px rgba(0,0,0,.04)',

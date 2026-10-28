@@ -184,6 +184,9 @@ exports.getOptimizedProducts = async (req, res) => {
       // CHALLAN_OUT stores negative values and CHALLAN_IN stores positive values.
       History.aggregate([
         { $match: { product: { $in: productIds }, action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] } } },
+        { $lookup: { from: 'products', localField: 'product', foreignField: '_id', as: 'productInfo' } },
+        { $unwind: '$productInfo' },
+        { $match: { $expr: { $gte: ['$timestamp', { $ifNull: ['$productInfo.stockResetAt', new Date(0)] }] } } },
         { $group: { _id: '$product', totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } } } }
       ])
     ]);

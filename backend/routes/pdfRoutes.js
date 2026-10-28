@@ -659,6 +659,7 @@ const Product = require('../models/Product');
 const SalaryEntry = require('../models/SalaryEntry');
 const History = require('../models/History');
 const axios = require('axios');
+const sharp = require('sharp');
 
 /* ---------------- THEME ---------------- */
 const BG_COLOR = '#ECEFF1';     // very light grey
@@ -793,6 +794,40 @@ router.post('/generate-pdf', async (req, res) => {
         );
       });
 
+    const imageBuffers = new Map();
+    if (includeImages) {
+      const imageUrls = [...new Set(groups.map(([, group]) => group.image).filter(Boolean))];
+      let nextImage = 0;
+      const workers = Array.from(
+        { length: Math.min(6, imageUrls.length) },
+        async () => {
+          while (nextImage < imageUrls.length) {
+            const imageUrl = imageUrls[nextImage++];
+            try {
+              const response = await axios.get(imageUrl, {
+                responseType: 'arraybuffer',
+                timeout: 15000,
+                maxContentLength: 10 * 1024 * 1024
+              });
+              imageBuffers.set(
+                imageUrl,
+                await sharp(Buffer.from(response.data))
+                  .rotate()
+                  .flatten({ background: '#ffffff' })
+                  .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+                  .jpeg({ quality: 78 })
+                  .toBuffer()
+              );
+            } catch (error) {
+              console.error('Image load error:', error.message);
+              imageBuffers.set(imageUrl, null);
+            }
+          }
+        }
+      );
+      await Promise.all(workers);
+    }
+
     /* ---------------- TABLE DRAWER ---------------- */
 
     const drawTable = (doc, x0, y0, sizes, colors, variants) => {
@@ -909,12 +944,10 @@ const labelW = 60;
       const leftW = LEFT_W;
       const leftH = PAGE_H - 140;
 
-      if (includeImages && g.image) {
+      const imageBuffer = g.image && imageBuffers.get(g.image);
+      if (imageBuffer) {
         try {
-          const img = await axios.get(g.image, { responseType: 'arraybuffer' });
-          const buf = Buffer.from(img.data, 'binary');
-
-          const imgObj = doc.openImage(buf);
+          const imgObj = doc.openImage(imageBuffer);
           const iw = imgObj.width;
           const ih = imgObj.height;
 
@@ -932,7 +965,7 @@ const labelW = 60;
           const dx = cx + (cw - sw) / 2;
           const dy = cy + (ch - sh) / 2;
 
-          doc.image(buf, dx, dy, {
+          doc.image(imageBuffer, dx, dy, {
             width: sw,
             height: sh
           });

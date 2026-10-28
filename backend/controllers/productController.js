@@ -3,6 +3,7 @@
 const Product = require('../models/Product');
 const SalaryEntry = require('../models/SalaryEntry');
 const History = require('../models/History');  // <-- Import History model
+const mongoose = require('mongoose');
 
 const { exportToExcel, importFromExcel } = require('../utils/excel');
 const multer = require('multer');
@@ -13,6 +14,150 @@ const upload = multer({ storage });
 function escapeRegex(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+// Admin-only: zero one EVA/PU/Injection category while preserving the audit trail.
+exports.resetStockByCategory = async (req, res) => {
+  try {
+    const stockType = String(req.body.stockType || '').trim().toLowerCase();
+    const gender = String(req.body.gender || '').trim().toLowerCase();
+    const allowedTypes = ['eva', 'pu', 'injection'];
+    const allowedGenders = ['all', 'ladies', 'gents', 'kids_ladies', 'kids_gents'];
+    if (!allowedTypes.includes(stockType) || !allowedGenders.includes(gender)) {
+      return res.status(400).json({ error: 'Choose a valid stock category' });
+    }
+
+    const productFilter = { stockType, isDeleted: false };
+    if (gender !== 'all') productFilter.gender = gender;
+    const products = await Product.find(productFilter)
+      .select('_id article cartons totalPairs stockResetAt')
+      .lean();
+    if (!products.length) return res.json({ success: true, resetCount: 0 });
+
+    const now = new Date();
+    const productIds = products.map(product => product._id);
+    const salaryEntries = await SalaryEntry.find({ product: { $in: productIds } })
+      .select('_id product cartons totalPairs')
+      .lean();
+    const salaryEntriesByProduct = new Map();
+    salaryEntries.forEach(entry => {
+      const productId = String(entry.product);
+      if (!salaryEntriesByProduct.has(productId)) salaryEntriesByProduct.set(productId, []);
+      salaryEntriesByProduct.get(productId).push({
+        _id: entry._id,
+        cartons: entry.cartons,
+        totalPairs: entry.totalPairs
+      });
+    });
+    const resetBatchId = new mongoose.Types.ObjectId();
+
+    await History.insertMany(products.map(product => ({
+        product: product._id,
+        action: 'STOCK_RESET',
+        quantityChanged: 0,
+        updatedBy: req.user.id,
+        updatedByName: req.body.updatedByName || 'ADMIN',
+        articleText: product.article,
+        note: `Admin reset: ${stockType.toUpperCase()} ${gender.toUpperCase()} cartons and total pairs set to 0`,
+        timestamp: now,
+        resetBatchId,
+        resetSnapshot: {
+          cartons: product.cartons ?? 0,
+          totalPairs: product.totalPairs ?? 0,
+          stockResetAt: product.stockResetAt ?? null,
+          salaryEntries: salaryEntriesByProduct.get(String(product._id)) || []
+        }
+      })));
+
+    await Promise.all([
+      Product.updateMany(productFilter, {
+        $set: { cartons: 0, totalPairs: 0, stockResetAt: now }
+      }),
+      SalaryEntry.updateMany(
+        { product: { $in: productIds } },
+        { $set: { cartons: 0, totalPairs: 0 } }
+      )
+    ]);
+    res.json({ success: true, resetCount: products.length, resetBatchId });
+  } catch (err) {
+    console.error('resetStockByCategory error:', err);
+    res.status(500).json({ error: 'Stock reset failed' });
+  }
+};
+
+const RESET_UNDO_EMAIL = 'kumarrahul614812@gmail.com';
+
+function canUndoStockReset(req) {
+  return req.admin?.email?.toLowerCase() === RESET_UNDO_EMAIL;
+}
+
+async function findLatestUndoableReset(userId) {
+  return History.findOne({
+    action: 'STOCK_RESET',
+    updatedBy: userId,
+    resetBatchId: { $exists: true },
+    resetSnapshot: { $exists: true },
+    undoneAt: { $exists: false }
+  }).sort({ timestamp: -1 }).select('resetBatchId note timestamp').lean();
+}
+
+exports.getLatestUndoableStockReset = async (req, res) => {
+  if (!canUndoStockReset(req)) return res.status(403).json({ error: 'Undo is not available for this admin account' });
+  try {
+    const reset = await findLatestUndoableReset(req.user.id);
+    res.json({ reset: reset || null });
+  } catch (err) {
+    console.error('getLatestUndoableStockReset error:', err);
+    res.status(500).json({ error: 'Could not load the latest reset' });
+  }
+};
+
+exports.undoLatestStockReset = async (req, res) => {
+  if (!canUndoStockReset(req)) return res.status(403).json({ error: 'Undo is not available for this admin account' });
+  try {
+    const latestReset = await findLatestUndoableReset(req.user.id);
+    if (!latestReset || String(latestReset.resetBatchId) !== String(req.body.resetBatchId || '')) {
+      return res.status(409).json({ error: 'The latest reset changed or has already been undone' });
+    }
+
+    const resetRecords = await History.find({
+      action: 'STOCK_RESET',
+      updatedBy: req.user.id,
+      resetBatchId: latestReset.resetBatchId,
+      undoneAt: { $exists: false }
+    }).select('product resetSnapshot').lean();
+    const productUpdates = [];
+    const salaryUpdates = [];
+
+    resetRecords.forEach(record => {
+      const snapshot = record.resetSnapshot;
+      if (!snapshot) return;
+      const productSet = { cartons: snapshot.cartons, totalPairs: snapshot.totalPairs };
+      const productUpdate = { $set: productSet };
+      if (snapshot.stockResetAt) productSet.stockResetAt = snapshot.stockResetAt;
+      else productUpdate.$unset = { stockResetAt: 1 };
+      productUpdates.push({ updateOne: { filter: { _id: record.product }, update: productUpdate } });
+      (snapshot.salaryEntries || []).forEach(entry => {
+        salaryUpdates.push({
+          updateOne: {
+            filter: { _id: entry._id },
+            update: { $set: { cartons: entry.cartons, totalPairs: entry.totalPairs } }
+          }
+        });
+      });
+    });
+
+    if (productUpdates.length) await Product.bulkWrite(productUpdates);
+    if (salaryUpdates.length) await SalaryEntry.bulkWrite(salaryUpdates);
+    await History.updateMany(
+      { action: 'STOCK_RESET', updatedBy: req.user.id, resetBatchId: latestReset.resetBatchId, undoneAt: { $exists: false } },
+      { $set: { undoneAt: new Date() } }
+    );
+    res.json({ success: true, restoredCount: productUpdates.length });
+  } catch (err) {
+    console.error('undoLatestStockReset error:', err);
+    res.status(500).json({ error: 'Stock reset undo failed' });
+  }
+};
 
 exports.getProductById = async (req, res) => {
   try {

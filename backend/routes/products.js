@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middlewares/auth');
+const admin = require('../middlewares/admin');
 const upload = require('../middlewares/upload'); 
 const Product = require('../models/Product'); 
 const ExcelJS = require('exceljs');
@@ -25,6 +26,9 @@ const {
   getArticleGenderSizeInfo,
    getAllowedGendersForArticle,
    getAllUserEntriesForProduct,
+   resetStockByCategory,
+  getLatestUndoableStockReset,
+  undoLatestStockReset,
 
 } = require('../controllers/productController');
 
@@ -47,6 +51,9 @@ router.get('/', getProducts);
 // Must be registered before /:id to avoid Express matching "optimized" as an id.
 router.get('/optimized',      getOptimizedProducts);
 router.get('/filter-options', getFilterOptions);
+router.post('/reset-stock-category', auth, admin, resetStockByCategory);
+router.get('/reset-stock-category/undo', auth, admin, getLatestUndoableStockReset);
+router.post('/reset-stock-category/undo', auth, admin, undoLatestStockReset);
 
 
 router.get('/article-options', getArticleOptions);

@@ -1153,7 +1153,7 @@ const handleGeneratePDF = async () => {
       filters: {}
     }, { 
       responseType: 'blob',
-      timeout: 60000 // ✅ 60 second timeout
+      timeout: 180000 // 3 minutes for image-heavy catalogues
     });
 
     triggerDownload(

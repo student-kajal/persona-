@@ -44,6 +44,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 const allowedOrigins = [
   'https://dazzling-pika-056e2c.netlify.app',
   'http://localhost:3000',
+  'http://localhost:3001',
   ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
 ];
 
