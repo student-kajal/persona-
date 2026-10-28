@@ -770,7 +770,7 @@ export default function OptimizedProductTable({ title = 'Stock Inventory' }) {
       </div>
 
       {/* ── search + filters ────────────────────────────────────────────── */}
-      {user?.role === 'admin' && (
+      {canUndoStockReset && (
         <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 12, padding: '14px 18px', marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#9a3412', marginBottom: 4 }}>Admin stock reset</div>
           <div style={{ fontSize: 12, color: '#9a3412', marginBottom: 11 }}>Category reset se cartons aur total pairs 0 honge. Pair/Carton same rahega. History delete nahi hogi.</div>

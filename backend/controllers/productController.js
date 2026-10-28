@@ -15,8 +15,15 @@ function escapeRegex(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Admin-only: zero one EVA/PU/Injection category while preserving the audit trail.
+const RESET_UNDO_EMAIL = 'kumarrahul614812@gmail.com';
+
+function canUndoStockReset(req) {
+  return req.admin?.email?.toLowerCase() === RESET_UNDO_EMAIL;
+}
+
+// Only the designated admin account may reset stock or undo a reset.
 exports.resetStockByCategory = async (req, res) => {
+  if (!canUndoStockReset(req)) return res.status(403).json({ error: 'Stock reset is not available for this admin account' });
   try {
     const stockType = String(req.body.stockType || '').trim().toLowerCase();
     const gender = String(req.body.gender || '').trim().toLowerCase();
@@ -83,12 +90,6 @@ exports.resetStockByCategory = async (req, res) => {
     res.status(500).json({ error: 'Stock reset failed' });
   }
 };
-
-const RESET_UNDO_EMAIL = 'kumarrahul614812@gmail.com';
-
-function canUndoStockReset(req) {
-  return req.admin?.email?.toLowerCase() === RESET_UNDO_EMAIL;
-}
 
 async function findLatestUndoableReset(userId) {
   return History.findOne({
@@ -1113,5 +1114,4 @@ exports.getAllUserEntriesForProduct = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
-
 
