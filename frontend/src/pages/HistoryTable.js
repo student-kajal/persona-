@@ -1197,7 +1197,7 @@ const HistoryTable = () => {
 
   // dropdown options (current page data)
   const uniqueActions = useMemo(
-    () => [...new Set(history.map((entry) => entry.action))].sort(),
+    () => [...new Set([...history.map((entry) => entry.action), 'STOCK_RESET'])].sort(),
     [history]
   );
   const uniqueUpdatedBy = useMemo(
@@ -1257,7 +1257,7 @@ const HistoryTable = () => {
       );
       return;
     }
-    if (row.action === 'CHALLAN_OUT') return;
+    if (['CHALLAN_OUT', 'STOCK_RESET'].includes(row.action)) return;
 
     if (
       !window.confirm(
@@ -1699,7 +1699,9 @@ const HistoryTable = () => {
                                 : ''
                             }`}
                             title={
-                              entry.action !== 'CHALLAN_OUT'
+                              entry.action === 'STOCK_RESET'
+                                ? 'Reset audit entries cannot be deleted'
+                                : entry.action !== 'CHALLAN_OUT'
                                 ? 'Delete is only allowed for CHALLAN_OUT entries'
                                 : 'Delete challan entry and revert stock'
                             }
@@ -1720,16 +1722,18 @@ const HistoryTable = () => {
                           {/* Permanent Delete Button */}
                           <button
                             className={`btn btn-action btn-permanent ${
-                              entry.action === 'CHALLAN_OUT'
+                              ['CHALLAN_OUT', 'STOCK_RESET'].includes(entry.action)
                                 ? 'btn-disabled'
                                 : ''
                             }`}
                             disabled={
-                              entry.action === 'CHALLAN_OUT'
+                              ['CHALLAN_OUT', 'STOCK_RESET'].includes(entry.action)
                             }
                             title={
                               entry.action === 'CHALLAN_OUT'
                                 ? 'Permanent delete disabled for Challan OUT entries'
+                                : entry.action === 'STOCK_RESET'
+                                ? 'Reset audit entries cannot permanently delete products'
                                 : 'Permanently remove this entry'
                             }
                             onClick={() =>

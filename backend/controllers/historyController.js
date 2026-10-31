@@ -31,7 +31,7 @@ exports.getHistory = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // ✅ BASE FILTER
-    const filter = {};
+    const filter = action ? { action } : { action: { $ne: 'STOCK_RESET' } };
 
     // Existing filters
     if (productId) filter.product = productId;
@@ -390,7 +390,7 @@ exports.getPageOfArticle = async (req, res) => {
     const limitNum = Math.max(parseInt(limit, 10) || 50, 1);
 
     // 1) Same base filter as list (without search)
-    const baseFilter = {}; // agar action/from/to/userId lagana ho to yahin add kar
+    const baseFilter = { action: { $ne: 'STOCK_RESET' } };
 
     // 2) Target record (latest history for this article)
     const target = await History.findOne({
