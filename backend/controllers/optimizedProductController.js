@@ -2,6 +2,7 @@
 const Product = require('../models/Product');
 const SalaryEntry = require('../models/SalaryEntry');
 const History = require('../models/History');
+const { buildNetChallanOutPipeline } = require('../utils/stockCalculations');
 
 // Fixed hierarchical sort priority for stockType + gender combinations.
 // This expression is used inside MongoDB $addFields and never mutates data.
@@ -179,16 +180,8 @@ exports.getOptimizedProducts = async (req, res) => {
         { $match: { product: { $in: productIds } } },
         { $group: { _id: '$product', total: { $sum: '$cartons' } } }
       ]),
-      // Include CHALLAN_IN (challan-delete reversals) so that deleted challans
-      // correctly restore stock. Formula: netOut = -sum(quantityChanged) because
-      // CHALLAN_OUT stores negative values and CHALLAN_IN stores positive values.
-      History.aggregate([
-        { $match: { product: { $in: productIds }, action: { $in: ['CHALLAN_OUT', 'CHALLAN_IN'] } } },
-        { $lookup: { from: 'products', localField: 'product', foreignField: '_id', as: 'productInfo' } },
-        { $unwind: '$productInfo' },
-        { $match: { $expr: { $gte: ['$timestamp', { $ifNull: ['$productInfo.stockResetAt', new Date(0)] }] } } },
-        { $group: { _id: '$product', totalOut: { $sum: { $multiply: ['$quantityChanged', -1] } } } }
-      ])
+      // Only challans after the latest stock reset affect current stock.
+      History.aggregate(buildNetChallanOutPipeline(productIds))
     ]);
 
     const salaryMap  = new Map(salaryTotals.map(s => [s._id.toString(), s.total]));

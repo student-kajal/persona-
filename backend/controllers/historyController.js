@@ -157,20 +157,21 @@ exports.deleteHistoryEntry = async (req, res) => {
     }
 
     const cartonChange = historyEntry.quantityChanged;
+    const affectsCurrentStock = !product.stockResetAt || historyEntry.timestamp > product.stockResetAt;
 
     // === 1️⃣ Handle CHALLAN actions (keep existing logic) ===
-    if (action === 'CHALLAN_OUT') {
+    if (affectsCurrentStock && action === 'CHALLAN_OUT') {
       product.cartons += Math.abs(cartonChange);
       product.cartonsChallanedOut = Math.max(0, (product.cartonsChallanedOut || 0) - Math.abs(cartonChange));
       await product.save({ session });
-    } else if (action === 'CHALLAN_IN') {
+    } else if (affectsCurrentStock && action === 'CHALLAN_IN') {
       product.cartons = Math.max(0, product.cartons - cartonChange);
       product.cartonsChallanedOut = (product.cartonsChallanedOut || 0) + cartonChange;
       await product.save({ session });
     }
 
     // === 2️⃣ Handle ADD/UPDATE actions ===
-    if (['UPDATE', 'ADD'].includes(action)) {
+    if (affectsCurrentStock && ['UPDATE', 'ADD'].includes(action)) {
       // First revert the salary entry
       await SalaryEntry.findOneAndUpdate(
         {

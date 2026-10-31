@@ -9,6 +9,7 @@ const { exportToExcel, importFromExcel } = require('../utils/excel');
 const multer = require('multer');
 const fs = require('fs');
 const { storage } = require('../config/cloudinary');
+const { buildNetChallanOutPipeline } = require('../utils/stockCalculations');
 
 const upload = multer({ storage });
 function escapeRegex(str) {
@@ -24,6 +25,7 @@ function canUndoStockReset(req) {
 // Only the designated admin account may reset stock or undo a reset.
 exports.resetStockByCategory = async (req, res) => {
   if (!canUndoStockReset(req)) return res.status(403).json({ error: 'Stock reset is not available for this admin account' });
+  const session = await mongoose.startSession();
   try {
     const stockType = String(req.body.stockType || '').trim().toLowerCase();
     const gender = String(req.body.gender || '').trim().toLowerCase();
@@ -33,31 +35,40 @@ exports.resetStockByCategory = async (req, res) => {
       return res.status(400).json({ error: 'Choose a valid stock category' });
     }
 
-    const productFilter = { stockType, isDeleted: false };
-    if (gender !== 'all') productFilter.gender = gender;
-    const products = await Product.find(productFilter)
-      .select('_id article cartons totalPairs stockResetAt')
-      .lean();
-    if (!products.length) return res.json({ success: true, resetCount: 0 });
+    const productFilter = {
+      stockType: new RegExp(`^${stockType}$`, 'i'),
+      isDeleted: false
+    };
+    if (gender !== 'all') productFilter.gender = new RegExp(`^${gender}$`, 'i');
 
-    const now = new Date();
-    const productIds = products.map(product => product._id);
-    const salaryEntries = await SalaryEntry.find({ product: { $in: productIds } })
-      .select('_id product cartons totalPairs')
-      .lean();
-    const salaryEntriesByProduct = new Map();
-    salaryEntries.forEach(entry => {
-      const productId = String(entry.product);
-      if (!salaryEntriesByProduct.has(productId)) salaryEntriesByProduct.set(productId, []);
-      salaryEntriesByProduct.get(productId).push({
-        _id: entry._id,
-        cartons: entry.cartons,
-        totalPairs: entry.totalPairs
+    let resetCount = 0;
+    let resetBatchId = null;
+    await session.withTransaction(async () => {
+      const products = await Product.find(productFilter)
+        .select('_id article cartons totalPairs cartonsChallanedOut stockResetAt')
+        .session(session)
+        .lean();
+      if (!products.length) return;
+
+      const now = new Date();
+      const productIds = products.map(product => product._id);
+      const salaryEntries = await SalaryEntry.find({ product: { $in: productIds } })
+        .select('_id product cartons totalPairs')
+        .session(session)
+        .lean();
+      const salaryEntriesByProduct = new Map();
+      salaryEntries.forEach(entry => {
+        const productId = String(entry.product);
+        if (!salaryEntriesByProduct.has(productId)) salaryEntriesByProduct.set(productId, []);
+        salaryEntriesByProduct.get(productId).push({
+          _id: entry._id,
+          cartons: entry.cartons,
+          totalPairs: entry.totalPairs
+        });
       });
-    });
-    const resetBatchId = new mongoose.Types.ObjectId();
+      resetBatchId = new mongoose.Types.ObjectId();
 
-    await History.insertMany(products.map(product => ({
+      await History.insertMany(products.map(product => ({
         product: product._id,
         action: 'STOCK_RESET',
         quantityChanged: 0,
@@ -70,35 +81,41 @@ exports.resetStockByCategory = async (req, res) => {
         resetSnapshot: {
           cartons: product.cartons ?? 0,
           totalPairs: product.totalPairs ?? 0,
+          cartonsChallanedOut: product.cartonsChallanedOut ?? 0,
           stockResetAt: product.stockResetAt ?? null,
           salaryEntries: salaryEntriesByProduct.get(String(product._id)) || []
         }
-      })));
+      })), { session });
 
-    await Promise.all([
-      Product.updateMany(productFilter, {
-        $set: { cartons: 0, totalPairs: 0, stockResetAt: now }
-      }),
-      SalaryEntry.updateMany(
+      await Product.updateMany(productFilter, {
+        $set: { cartons: 0, totalPairs: 0, cartonsChallanedOut: 0, stockResetAt: now }
+      }, { session });
+      await SalaryEntry.updateMany(
         { product: { $in: productIds } },
-        { $set: { cartons: 0, totalPairs: 0 } }
-      )
-    ]);
-    res.json({ success: true, resetCount: products.length, resetBatchId });
+        { $set: { cartons: 0, totalPairs: 0 } },
+        { session }
+      );
+      resetCount = products.length;
+    });
+    res.json({ success: true, resetCount, resetBatchId });
   } catch (err) {
     console.error('resetStockByCategory error:', err);
     res.status(500).json({ error: 'Stock reset failed' });
+  } finally {
+    await session.endSession();
   }
 };
 
-async function findLatestUndoableReset(userId) {
-  return History.findOne({
+async function findLatestUndoableReset(userId, session) {
+  let query = History.findOne({
     action: 'STOCK_RESET',
     updatedBy: userId,
     resetBatchId: { $exists: true },
     resetSnapshot: { $exists: true },
     undoneAt: { $exists: false }
-  }).sort({ timestamp: -1 }).select('resetBatchId note timestamp').lean();
+  }).sort({ timestamp: -1, _id: -1 }).select('resetBatchId note timestamp');
+  if (session) query = query.session(session);
+  return query.lean();
 }
 
 exports.getLatestUndoableStockReset = async (req, res) => {
@@ -114,49 +131,65 @@ exports.getLatestUndoableStockReset = async (req, res) => {
 
 exports.undoLatestStockReset = async (req, res) => {
   if (!canUndoStockReset(req)) return res.status(403).json({ error: 'Undo is not available for this admin account' });
+  const session = await mongoose.startSession();
   try {
-    const latestReset = await findLatestUndoableReset(req.user.id);
-    if (!latestReset || String(latestReset.resetBatchId) !== String(req.body.resetBatchId || '')) {
-      return res.status(409).json({ error: 'The latest reset changed or has already been undone' });
-    }
+    let result = { conflict: false, restoredCount: 0 };
+    await session.withTransaction(async () => {
+      const latestReset = await findLatestUndoableReset(req.user.id, session);
+      if (!latestReset || String(latestReset.resetBatchId) !== String(req.body.resetBatchId || '')) {
+        result.conflict = true;
+        return;
+      }
 
-    const resetRecords = await History.find({
-      action: 'STOCK_RESET',
-      updatedBy: req.user.id,
-      resetBatchId: latestReset.resetBatchId,
-      undoneAt: { $exists: false }
-    }).select('product resetSnapshot').lean();
-    const productUpdates = [];
-    const salaryUpdates = [];
+      const resetRecords = await History.find({
+        action: 'STOCK_RESET',
+        updatedBy: req.user.id,
+        resetBatchId: latestReset.resetBatchId,
+        undoneAt: { $exists: false }
+      }).select('product resetSnapshot').session(session).lean();
+      const productUpdates = [];
+      const salaryUpdates = [];
 
-    resetRecords.forEach(record => {
-      const snapshot = record.resetSnapshot;
-      if (!snapshot) return;
-      const productSet = { cartons: snapshot.cartons, totalPairs: snapshot.totalPairs };
-      const productUpdate = { $set: productSet };
-      if (snapshot.stockResetAt) productSet.stockResetAt = snapshot.stockResetAt;
-      else productUpdate.$unset = { stockResetAt: 1 };
-      productUpdates.push({ updateOne: { filter: { _id: record.product }, update: productUpdate } });
-      (snapshot.salaryEntries || []).forEach(entry => {
-        salaryUpdates.push({
-          updateOne: {
-            filter: { _id: entry._id },
-            update: { $set: { cartons: entry.cartons, totalPairs: entry.totalPairs } }
-          }
+      resetRecords.forEach(record => {
+        const snapshot = record.resetSnapshot;
+        if (!snapshot) return;
+        const productSet = {
+          cartons: snapshot.cartons ?? 0,
+          totalPairs: snapshot.totalPairs ?? 0,
+          cartonsChallanedOut: snapshot.cartonsChallanedOut ?? 0
+        };
+        const productUpdate = { $set: productSet };
+        if (snapshot.stockResetAt) productSet.stockResetAt = snapshot.stockResetAt;
+        else productUpdate.$unset = { stockResetAt: 1 };
+        productUpdates.push({ updateOne: { filter: { _id: record.product }, update: productUpdate } });
+        (snapshot.salaryEntries || []).forEach(entry => {
+          salaryUpdates.push({
+            updateOne: {
+              filter: { _id: entry._id },
+              update: { $set: { cartons: entry.cartons, totalPairs: entry.totalPairs } }
+            }
+          });
         });
       });
-    });
 
-    if (productUpdates.length) await Product.bulkWrite(productUpdates);
-    if (salaryUpdates.length) await SalaryEntry.bulkWrite(salaryUpdates);
-    await History.updateMany(
-      { action: 'STOCK_RESET', updatedBy: req.user.id, resetBatchId: latestReset.resetBatchId, undoneAt: { $exists: false } },
-      { $set: { undoneAt: new Date() } }
-    );
-    res.json({ success: true, restoredCount: productUpdates.length });
+      if (productUpdates.length) await Product.bulkWrite(productUpdates, { session });
+      if (salaryUpdates.length) await SalaryEntry.bulkWrite(salaryUpdates, { session });
+      await History.updateMany(
+        { action: 'STOCK_RESET', updatedBy: req.user.id, resetBatchId: latestReset.resetBatchId, undoneAt: { $exists: false } },
+        { $set: { undoneAt: new Date() } },
+        { session }
+      );
+      result.restoredCount = productUpdates.length;
+    });
+    if (result.conflict) {
+      return res.status(409).json({ error: 'The latest reset changed or has already been undone' });
+    }
+    res.json({ success: true, restoredCount: result.restoredCount });
   } catch (err) {
     console.error('undoLatestStockReset error:', err);
     res.status(500).json({ error: 'Stock reset undo failed' });
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -190,21 +223,8 @@ exports.getProductById = async (req, res) => {
     const totalSalary = totalSalaryAgg[0]?.total || 0;
 
     // ✅ 3. Get total challan out
-    const challanAgg = await History.aggregate([
-      {
-        $match: {
-          product: product._id,
-          action: 'CHALLAN_OUT'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalOut: { $sum: { $abs: '$quantityChanged' } }
-        }
-      }
-    ]);
-    const totalChallanOut = challanAgg[0]?.totalOut || 0;
+    const challanAgg = await History.aggregate(buildNetChallanOutPipeline([product._id]));
+    const totalChallanOut = Math.max(0, challanAgg[0]?.totalOut || 0);
 
     // ✅ 4. Product.cartons = Total Salary - Challan
    // const totalAvailableCartons = Math.max(0, totalSalary - totalChallanOut);
@@ -286,21 +306,8 @@ exports.updateProduct = async (req, res) => {
     ]);
     const totalSalary = totalSalaryAgg[0]?.total || 0;
 
-    const challanAgg = await History.aggregate([
-      {
-        $match: {
-          product: product._id,
-          action: 'CHALLAN_OUT'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalOut: { $sum: { $abs: '$quantityChanged' } }
-        }
-      }
-    ]);
-    const totalChallanOut = challanAgg[0]?.totalOut || 0;
+    const challanAgg = await History.aggregate(buildNetChallanOutPipeline([product._id]));
+    const totalChallanOut = Math.max(0, challanAgg[0]?.totalOut || 0);
 
   //  product.cartons = Math.max(0, totalSalary - totalChallanOut);
   product.cartons = totalSalary - totalChallanOut;
@@ -543,22 +550,9 @@ exports.createProduct = async (req, res) => {
       console.log(`✅ Manual count: ${finalSalaryTotal}`);
     }
 
-    const challanReductions = await History.aggregate([
-      {
-        $match: {
-          product: product._id,
-          action: 'CHALLAN_OUT'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalOut: { $sum: { $abs: '$quantityChanged' } }
-        }
-      }
-    ]);
+    const challanReductions = await History.aggregate(buildNetChallanOutPipeline([product._id]));
     
-    const totalChallanOut = challanReductions[0]?.totalOut || 0;
+    const totalChallanOut = Math.max(0, challanReductions[0]?.totalOut || 0);
     
     // ✅ FIX 3: Use finalSalaryTotal
    // product.cartons = Math.max(0, finalSalaryTotal - totalChallanOut);
@@ -626,27 +620,14 @@ exports.getProducts = async (req, res) => {
       }
     ]);
 
-    const challanTotals = await History.aggregate([
-      {
-        $match: {
-          product: { $in: productIds },
-          action: 'CHALLAN_OUT'
-        }
-      },
-      {
-        $group: {
-          _id: '$product',
-          totalOut: { $sum: { $abs: '$quantityChanged' } }
-        }
-      }
-    ]);
+    const challanTotals = await History.aggregate(buildNetChallanOutPipeline(productIds));
 
     // ✅ Create lookup maps for fast access
     const salaryMap = new Map();
     salaryTotals.forEach(s => salaryMap.set(s._id.toString(), s.total));
 
     const challanMap = new Map();
-    challanTotals.forEach(c => challanMap.set(c._id.toString(), c.totalOut));
+    challanTotals.forEach(c => challanMap.set(c._id.toString(), Math.max(0, c.totalOut || 0)));
 
     // ✅ Update product cartons in memory
     let finalProducts = products.map(product => {
@@ -1114,4 +1095,3 @@ exports.getAllUserEntriesForProduct = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
-
